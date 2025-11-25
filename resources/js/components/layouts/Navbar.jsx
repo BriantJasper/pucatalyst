@@ -34,7 +34,7 @@ export default function Navbar() {
                                 to="/student/dashboard"
                                 className={isActive("/student/dashboard")}
                             >
-                                
+                                Dashboard
                             </Link>
                             <Link
                                 to="/student/roadmap"

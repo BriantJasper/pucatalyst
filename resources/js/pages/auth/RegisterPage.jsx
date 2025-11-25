@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, User, Eye, EyeOff, Rocket, AlertCircle, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -19,9 +19,45 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Password strength calculation
+  const passwordStrength = useMemo(() => {
+    const password = formData.password;
+    if (!password) return { score: 0, label: '', color: '' };
+
+    let score = 0;
+    
+    // Length check
+    if (password.length >= 8) score++;
+    if (password.length >= 12) score++;
+    
+    // Character variety checks
+    if (/[a-z]/.test(password)) score++;
+    if (/[A-Z]/.test(password)) score++;
+    if (/[0-9]/.test(password)) score++;
+    if (/[^A-Za-z0-9]/.test(password)) score++;
+
+    // Determine strength level
+    if (score <= 2) return { score: 25, label: 'Weak', color: 'bg-red-500' };
+    if (score <= 4) return { score: 50, label: 'Fair', color: 'bg-orange-500' };
+    if (score <= 5) return { score: 75, label: 'Good', color: 'bg-yellow-500' };
+    return { score: 100, label: 'Strong', color: 'bg-green-500' };
+  }, [formData.password]);
+
+  // Email validation
+  const isValidEmail = (email) => {
+    const allowedDomains = ['@president.ac.id', '@student.president.ac.id'];
+    return allowedDomains.some(domain => email.toLowerCase().endsWith(domain));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    // Validate email domain
+    if (!isValidEmail(formData.email)) {
+      setError('Please use a valid President University email (@president.ac.id or @student.president.ac.id)');
+      return;
+    }
 
     if (formData.password !== formData.password_confirmation) {
       setError('Passwords do not match');
@@ -133,11 +169,14 @@ export default function RegisterPage() {
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="you@university.edu"
+                  placeholder="you@president.ac.id"
                   required
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition"
                 />
               </div>
+              <p className="mt-1 text-xs text-gray-500">
+                Use your President University email (@president.ac.id or @student.president.ac.id)
+              </p>
             </div>
 
             {/* Password */}
@@ -164,6 +203,32 @@ export default function RegisterPage() {
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
+              
+              {/* Password Strength Indicator */}
+              {formData.password && (
+                <div className="mt-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-gray-600">Password strength:</span>
+                    <span className={`text-xs font-semibold ${
+                      passwordStrength.label === 'Weak' ? 'text-red-600' :
+                      passwordStrength.label === 'Fair' ? 'text-orange-600' :
+                      passwordStrength.label === 'Good' ? 'text-yellow-600' :
+                      'text-green-600'
+                    }`}>
+                      {passwordStrength.label}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all duration-300 ${passwordStrength.color}`}
+                      style={{ width: `${passwordStrength.score}%` }}
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Use 8+ characters with uppercase, lowercase, numbers & symbols
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Confirm Password */}

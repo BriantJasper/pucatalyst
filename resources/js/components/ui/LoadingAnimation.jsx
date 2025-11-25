@@ -15,22 +15,22 @@ const LoadingAnimation = ({ onLoadingComplete }) => {
     const [isFadingOut, setIsFadingOut] = useState(false);
 
     useEffect(() => {
-        // Mark as complete after 3 seconds
+        // Mark as complete after 1.5 seconds
         const completeTimer = setTimeout(() => {
             setIsComplete(true);
-        }, 3000);
+        }, 1000);
 
-        // Start fading out after showing completion for 1 second
+        // Start fading out after showing completion for 0.5 seconds
         const fadeTimer = setTimeout(() => {
             setIsFadingOut(true);
-        }, 4000);
+        }, 2000);
 
         // Notify parent that loading is complete after fade out
         const unmountTimer = setTimeout(() => {
             if (onLoadingComplete) {
                 onLoadingComplete();
             }
-        }, 5500);
+        }, 3000);
 
         return () => {
             clearTimeout(completeTimer);
@@ -50,7 +50,7 @@ const LoadingAnimation = ({ onLoadingComplete }) => {
 
     return (
         <div
-            className={`fixed inset-0 bg-gradient-to-br from-indigo-950 via-purple-900 to-blue-950 flex items-center justify-center p-8 z-[9999] transition-opacity duration-[1500ms] ease-out ${
+            className={`fixed inset-0 bg-gradient-to-br from-indigo-950 via-purple-900 to-blue-950 flex items-center justify-center p-8 z-[9999] transition-opacity duration-1000 ease-out ${
                 isFadingOut ? "opacity-0" : "opacity-100"
             }`}
         >
