@@ -28,6 +28,9 @@ class User extends Authenticatable implements JWTSubject
         'role',
         'email_verified',
         'verification_token',
+        'face_encoding',
+        'face_auth_enabled',
+        'face_registered_at',
     ];
 
     /**
@@ -39,6 +42,7 @@ class User extends Authenticatable implements JWTSubject
         'password',
         'remember_token',
         'verification_token',
+        'face_encoding',
     ];
 
     /**
@@ -52,6 +56,8 @@ class User extends Authenticatable implements JWTSubject
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'email_verified' => 'boolean',
+            'face_auth_enabled' => 'boolean',
+            'face_registered_at' => 'datetime',
         ];
     }
 

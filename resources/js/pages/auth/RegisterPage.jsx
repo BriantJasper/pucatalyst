@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, User, Eye, EyeOff, Rocket, AlertCircle, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../lib/axios';
+import FaceCaptureComponent from '../../components/FaceCaptureComponent';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -18,6 +19,8 @@ export default function RegisterPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showFaceCapture, setShowFaceCapture] = useState(false);
+  const [faceImages, setFaceImages] = useState(null);
 
   // Password strength calculation
   const passwordStrength = useMemo(() => {
@@ -64,6 +67,47 @@ export default function RegisterPage() {
       return;
     }
 
+    // Show face capture modal
+    setShowFaceCapture(true);
+  };
+
+  const handleFaceCaptureComplete = async (capturedImages) => {
+    setShowFaceCapture(false);
+    setFaceImages(capturedImages);
+    setLoading(true);
+
+    try {
+      const registrationData = {
+        ...formData,
+        face_images: capturedImages,
+      };
+
+      const response = await api.post('/auth/register', registrationData);
+      
+      if (response.data.face_auth_enabled) {
+        toast.success('Registration successful with face authentication enabled!');
+      } else {
+        toast.success('Registration successful! Face authentication will be set up later.');
+      }
+      
+      navigate('/login');
+    } catch (err) {
+      const message = err.response?.data?.message || 'Registration failed. Please try again.';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFaceCaptureCancel = () => {
+    setShowFaceCapture(false);
+    toast.info('You can set up face authentication later from your profile.');
+    // Register without face authentication
+    registerWithoutFace();
+  };
+
+  const registerWithoutFace = async () => {
     setLoading(true);
 
     try {
@@ -286,6 +330,16 @@ export default function RegisterPage() {
           </p>
         </div>
       </div>
+
+      {/* Face Capture Modal */}
+      {showFaceCapture && (
+        <FaceCaptureComponent
+          onComplete={handleFaceCaptureComplete}
+          onCancel={handleFaceCaptureCancel}
+          minImages={5}
+          maxImages={7}
+        />
+      )}
     </div>
   );
 }
