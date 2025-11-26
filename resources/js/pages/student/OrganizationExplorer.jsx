@@ -12,12 +12,10 @@ import {
     MapPin,
 } from "lucide-react";
 import api from "../../lib/axios";
-import LoadingAnimation from "../../components/ui/LoadingAnimation";
 import Navbar from "../../components/layouts/Navbar";
 
 export default function OrganizationExplorer() {
     const [organizations, setOrganizations] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState("Society");
 
@@ -29,8 +27,6 @@ export default function OrganizationExplorer() {
             } catch (err) {
                 setError("Failed to load organizations");
                 console.error(err);
-            } finally {
-                setLoading(false);
             }
         };
 
@@ -66,10 +62,6 @@ export default function OrganizationExplorer() {
                 return <Award className="w-5 h-5" />;
         }
     };
-
-    if (loading) {
-        return <LoadingAnimation />;
-    }
 
     if (error) {
         return (

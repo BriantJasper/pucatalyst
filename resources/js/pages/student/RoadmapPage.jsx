@@ -3,10 +3,8 @@ import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import axios from "../../lib/axios";
 import RoadmapView from "../../components/RoadmapView";
-import LoadingAnimation from "../../components/ui/LoadingAnimation";
 
 export default function RoadmapPage() {
-    const [loading, setLoading] = useState(true);
     const [roadmap, setRoadmap] = useState(null);
 
     useEffect(() => {
@@ -20,16 +18,10 @@ export default function RoadmapPage() {
 
             const studentResponse = await axios.get(`/students/${userId}`);
             setRoadmap(studentResponse.data.roadmap);
-            setLoading(false);
         } catch (error) {
             console.error("Error fetching roadmap:", error);
-            setLoading(false);
         }
     };
-
-    if (loading) {
-        return <LoadingAnimation />;
-    }
 
     return (
         <div className="min-h-screen bg-gray-50 p-8">
