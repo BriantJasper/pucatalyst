@@ -16,10 +16,8 @@ import {
     X,
 } from "lucide-react";
 import Navbar from "../components/layouts/Navbar";
-import LoadingAnimation from "../components/ui/LoadingAnimation";
 
 const ProfilePage = () => {
-    const [loading, setLoading] = useState(true);
     const [user, setUser] = useState(null);
     const [resumeFile, setResumeFile] = useState(null);
     const [currentResume, setCurrentResume] = useState(null);
@@ -126,12 +124,9 @@ const ProfilePage = () => {
 
             const certsResponse = await axios.get("/certificates");
             setAvailableCertificates(certsResponse.data);
-
-            setLoading(false);
         } catch (error) {
             console.error("Error fetching profile:", error);
             toast.error("Failed to load profile data");
-            setLoading(false);
         }
     };
 
@@ -277,8 +272,6 @@ const ProfilePage = () => {
             toast.error("Failed to remove certificate");
         }
     };
-
-    if (loading) return <LoadingAnimation />;
 
     return (
         <div className="min-h-screen bg-gray-50">

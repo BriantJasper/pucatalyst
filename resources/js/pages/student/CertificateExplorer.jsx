@@ -13,7 +13,6 @@ import {
     Filter,
 } from "lucide-react";
 import api from "../../lib/axios";
-import LoadingAnimation from "../../components/ui/LoadingAnimation";
 import Navbar from "../../components/layouts/Navbar";
 
 export default function CertificateExplorer() {
@@ -21,14 +20,11 @@ export default function CertificateExplorer() {
         try {
             const response = await api.get("/certificates");
             setCertificates(response.data);
-            setLoading(false);
         } catch (err) {
             setError("Failed to load certificates");
-            setLoading(false);
         }
     };
     const [certificates, setCertificates] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedLevel, setSelectedLevel] = useState("All");
     const [selectedProvider, setSelectedProvider] = useState("All");
@@ -65,10 +61,6 @@ export default function CertificateExplorer() {
                 return "bg-gray-100 text-gray-700";
         }
     };
-
-    if (loading) {
-        return <LoadingAnimation />;
-    }
 
     if (error) {
         return (
