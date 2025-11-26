@@ -4,6 +4,7 @@ import { Mail, Lock, Eye, EyeOff, Rocket, AlertCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../../lib/axios";
 import { useAuthStore } from "../../store/authStore";
+import FaceVerificationComponent from "../../components/FaceVerificationComponent";
 
 export default function LoginPage() {
     const navigate = useNavigate();
@@ -16,6 +17,9 @@ export default function LoginPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const [showFaceVerification, setShowFaceVerification] = useState(false);
+    const [tempToken, setTempToken] = useState(null);
+    const [pendingUser, setPendingUser] = useState(null);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -24,6 +28,18 @@ export default function LoginPage() {
 
         try {
             const response = await api.post("/auth/login", formData);
+            
+            // Check if face verification is required
+            if (response.data.requires_face_verification) {
+                setTempToken(response.data.temp_token);
+                setPendingUser(response.data.user);
+                setShowFaceVerification(true);
+                setLoading(false);
+                toast.info('Please verify your face to complete login');
+                return;
+            }
+
+            // Normal login without face verification
             const { access_token, user } = response.data;
 
             localStorage.setItem("access_token", access_token);
@@ -32,21 +48,58 @@ export default function LoginPage() {
             toast.success(`Welcome back, ${user.name}!`);
 
             // Redirect based on role
-            if (user.role === "student") {
-                navigate("/student/dashboard");
-            } else if (user.role === "alumni") {
-                navigate("/alumni/dashboard");
-            } else if (user.role === "admin") {
-                navigate("/admin/dashboard");
-            }
+            redirectBasedOnRole(user);
         } catch (err) {
             const message =
                 err.response?.data?.message ||
                 "Login failed. Please try again.";
             setError(message);
             toast.error(message);
-        } finally {
             setLoading(false);
+        }
+    };
+
+    const handleFaceVerification = async (faceImage) => {
+        try {
+            const response = await api.post("/auth/verify-face", {
+                face_image: faceImage,
+                temp_token: tempToken,
+            });
+
+            if (response.data.access_token) {
+                const { access_token, user, confidence } = response.data;
+
+                localStorage.setItem("access_token", access_token);
+                setAuth(user, access_token);
+
+                toast.success(`Face verified! Welcome back, ${user.name}! (Confidence: ${confidence}%)`);
+                setShowFaceVerification(false);
+
+                // Redirect based on role
+                redirectBasedOnRole(user);
+            }
+        } catch (err) {
+            const message = err.response?.data?.message || err.response?.data?.error || "Face verification failed";
+            setError(message);
+            toast.error(message);
+            setShowFaceVerification(false);
+        }
+    };
+
+    const handleFaceVerificationCancel = () => {
+        setShowFaceVerification(false);
+        setTempToken(null);
+        setPendingUser(null);
+        toast.info('Face verification cancelled. Please try again.');
+    };
+
+    const redirectBasedOnRole = (user) => {
+        if (user.role === "student") {
+            navigate("/student/dashboard");
+        } else if (user.role === "alumni") {
+            navigate("/alumni/dashboard");
+        } else if (user.role === "admin") {
+            navigate("/admin/dashboard");
         }
     };
 
@@ -185,6 +238,15 @@ export default function LoginPage() {
                     </p>
                 </div>
             </div>
+
+            {/* Face Verification Modal */}
+            {showFaceVerification && (
+                <FaceVerificationComponent
+                    onVerify={handleFaceVerification}
+                    onCancel={handleFaceVerificationCancel}
+                    userEmail={pendingUser?.email}
+                />
+            )}
         </div>
     );
 }

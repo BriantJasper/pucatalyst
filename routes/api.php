@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\AdminController;
 // Public Routes
 Route::post('/auth/register', [AuthController::class, 'register']);
 Route::post('/auth/login', [AuthController::class, 'login']);
+Route::post('/auth/verify-face', [AuthController::class, 'verifyFace']);
 Route::post('/auth/login-face', [AuthController::class, 'loginWithFace']);
 Route::get('/auth/google', [AuthController::class, 'redirectToGoogle']);
 Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback']);
