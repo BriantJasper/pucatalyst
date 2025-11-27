@@ -27,6 +27,10 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/auth/refresh', [AuthController::class, 'refresh']);
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/register-face', [AuthController::class, 'registerFace']);
+    Route::post('/auth/setup-face-auth', [AuthController::class, 'setupFaceAuth']);
+    Route::post('/auth/disable-face-auth', [AuthController::class, 'disableFaceAuth']);
+    Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
+    Route::delete('/auth/delete-account', [AuthController::class, 'deleteAccount']);
 
     // Student Routes
     Route::apiResource('students', StudentController::class);

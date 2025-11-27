@@ -11,7 +11,7 @@ export default function LoginPage() {
     const setAuth = useAuthStore((state) => state.setAuth);
 
     const [formData, setFormData] = useState({
-        email: "",
+        login: "",
         password: "",
     });
     const [showPassword, setShowPassword] = useState(false);
@@ -72,7 +72,7 @@ export default function LoginPage() {
                 localStorage.setItem("access_token", access_token);
                 setAuth(user, access_token);
 
-                toast.success(`Face verified! Welcome back, ${user.name}! (Confidence: ${confidence}%)`);
+                toast.success(`Face verified! Welcome back, ${user.name}! (Confidence: ${confidence.toFixed(1)}%)`);
                 setShowFaceVerification(false);
 
                 // Redirect based on role
@@ -80,9 +80,23 @@ export default function LoginPage() {
             }
         } catch (err) {
             const message = err.response?.data?.message || err.response?.data?.error || "Face verification failed";
+            const confidence = err.response?.data?.confidence;
+            
+            // Show detailed error message
+            if (message.includes('not match') || message.includes('does not match')) {
+                toast.error(
+                    confidence 
+                        ? `Face does not match! (Confidence: ${confidence.toFixed(1)}%) Please try again or contact support.`
+                        : 'Face does not match! Please ensure good lighting and try again.',
+                    { duration: 5000 }
+                );
+            } else {
+                toast.error(message, { duration: 4000 });
+            }
+            
             setError(message);
-            toast.error(message);
             setShowFaceVerification(false);
+            setLoading(false);
         }
     };
 
@@ -138,23 +152,23 @@ export default function LoginPage() {
 
                     {/* Form */}
                     <form onSubmit={handleSubmit} className="space-y-5">
-                        {/* Email */}
+                        {/* Email or Student ID */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Email Address
+                                Email or Student ID
                             </label>
                             <div className="relative">
                                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                                 <input
-                                    type="email"
-                                    value={formData.email}
+                                    type="text"
+                                    value={formData.login}
                                     onChange={(e) =>
                                         setFormData({
                                             ...formData,
-                                            email: e.target.value,
+                                            login: e.target.value,
                                         })
                                     }
-                                    placeholder="you@president.ac.id"
+                                    placeholder="Email or Student ID"
                                     required
                                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition"
                                 />
