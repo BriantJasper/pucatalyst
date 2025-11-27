@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('students', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id')->unique();
-            $table->string('student_id')->unique()->nullable();
+            $table->string('student_id')->unique();
             $table->string('major');
             $table->enum('year', ['1', '2', '3', '4'])->default('1');
             $table->decimal('gpa', 3, 2)->nullable();

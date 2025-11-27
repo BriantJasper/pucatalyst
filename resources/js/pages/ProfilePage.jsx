@@ -14,14 +14,40 @@ import {
     ScrollText,
     Plus,
     X,
+    Shield,
+    Lock,
+    Eye,
+    EyeOff,
+    Trash2,
+    AlertTriangle,
 } from "lucide-react";
 import Navbar from "../components/layouts/Navbar";
+import FaceAuthSettings from "../components/FaceAuthSettings";
+import { useAuthStore } from "../store/authStore";
 
 const ProfilePage = () => {
+    const { user: authUser, setAuth } = useAuthStore();
     const [user, setUser] = useState(null);
+    const [activeTab, setActiveTab] = useState('profile');
     const [resumeFile, setResumeFile] = useState(null);
     const [currentResume, setCurrentResume] = useState(null);
     const [isResumeModalOpen, setIsResumeModalOpen] = useState(false);
+
+    // Password change state
+    const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [passwordData, setPasswordData] = useState({
+        current_password: '',
+        new_password: '',
+        new_password_confirmation: '',
+    });
+    const [passwordLoading, setPasswordLoading] = useState(false);
+
+    // Delete account state
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deleteConfirmText, setDeleteConfirmText] = useState('');
+    const [deleteLoading, setDeleteLoading] = useState(false);
 
     // Organizations & Certificates State
     const [organizations, setOrganizations] = useState([]);
@@ -53,6 +79,7 @@ const ProfilePage = () => {
             const response = await axios.get("/auth/me");
             const userData = response.data;
             setUser(userData);
+            setAuth(userData, localStorage.getItem('access_token'));
 
             // Fetch student details
             // Assuming the user ID is needed or we have a specific endpoint for current student profile
@@ -273,11 +300,109 @@ const ProfilePage = () => {
         }
     };
 
+    const handleUserUpdate = (updatedUser) => {
+        setUser(updatedUser);
+        setAuth(updatedUser, localStorage.getItem('access_token'));
+    };
+
+    const handlePasswordChange = async (e) => {
+        e.preventDefault();
+        
+        if (passwordData.new_password !== passwordData.new_password_confirmation) {
+            toast.error('New passwords do not match');
+            return;
+        }
+
+        if (passwordData.new_password.length < 8) {
+            toast.error('Password must be at least 8 characters');
+            return;
+        }
+
+        setPasswordLoading(true);
+        try {
+            await axios.post('/auth/change-password', passwordData);
+            toast.success('Password changed successfully!');
+            setPasswordData({
+                current_password: '',
+                new_password: '',
+                new_password_confirmation: '',
+            });
+        } catch (error) {
+            const message = error.response?.data?.message || 'Failed to change password';
+            toast.error(message);
+        } finally {
+            setPasswordLoading(false);
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        if (deleteConfirmText !== 'DELETE') {
+            toast.error('Please type DELETE to confirm');
+            return;
+        }
+
+        setDeleteLoading(true);
+        try {
+            await axios.delete('/auth/delete-account');
+            toast.success('Account deleted successfully');
+            
+            // Clear auth and redirect to home
+            localStorage.removeItem('access_token');
+            setAuth(null, null);
+            window.location.href = '/';
+        } catch (error) {
+            const message = error.response?.data?.message || 'Failed to delete account';
+            toast.error(message);
+        } finally {
+            setDeleteLoading(false);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gray-50">
             <Navbar />
             <div className="py-12 px-4 sm:px-6 lg:px-8">
                 <div className="max-w-4xl mx-auto">
+                    {/* Header */}
+                    <div className="mb-8">
+                        <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
+                        <p className="text-gray-600 mt-2">Manage your profile and account settings</p>
+                    </div>
+
+                    {/* Tabs */}
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
+                        <div className="flex border-b border-gray-200">
+                            <button
+                                onClick={() => setActiveTab('profile')}
+                                className={`px-6 py-4 font-medium transition ${
+                                    activeTab === 'profile'
+                                        ? 'text-indigo-600 border-b-2 border-indigo-600'
+                                        : 'text-gray-600 hover:text-gray-900'
+                                }`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <User className="w-5 h-5" />
+                                    Profile
+                                </div>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('security')}
+                                className={`px-6 py-4 font-medium transition ${
+                                    activeTab === 'security'
+                                        ? 'text-indigo-600 border-b-2 border-indigo-600'
+                                        : 'text-gray-600 hover:text-gray-900'
+                                }`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <Shield className="w-5 h-5" />
+                                    Security
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Profile Tab */}
+                    {activeTab === 'profile' && (
                     <div className="bg-white shadow-xl rounded-2xl overflow-hidden">
                         <div className="bg-indigo-600 px-8 py-6">
                             <h1 className="text-3xl font-bold text-white flex items-center gap-3">
@@ -683,8 +808,232 @@ const ProfilePage = () => {
                             </div>
                         </form>
                     </div>
+                    )}
+
+                    {/* Security Tab */}
+                    {activeTab === 'security' && (
+                        <div className="space-y-6">
+                            {/* Change Password Section */}
+                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className="p-2 bg-indigo-100 rounded-lg">
+                                        <Lock className="w-6 h-6 text-indigo-600" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-xl font-bold text-gray-900">Change Password</h2>
+                                        <p className="text-sm text-gray-600">Update your password to keep your account secure</p>
+                                    </div>
+                                </div>
+
+                                <form onSubmit={handlePasswordChange} className="space-y-4">
+                                    {/* Current Password */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Current Password
+                                        </label>
+                                        <div className="relative">
+                                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                            <input
+                                                type={showCurrentPassword ? "text" : "password"}
+                                                value={passwordData.current_password}
+                                                onChange={(e) => setPasswordData({...passwordData, current_password: e.target.value})}
+                                                required
+                                                className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition"
+                                                placeholder="Enter current password"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                            >
+                                                {showCurrentPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* New Password */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            New Password
+                                        </label>
+                                        <div className="relative">
+                                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                            <input
+                                                type={showNewPassword ? "text" : "password"}
+                                                value={passwordData.new_password}
+                                                onChange={(e) => setPasswordData({...passwordData, new_password: e.target.value})}
+                                                required
+                                                minLength={8}
+                                                className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition"
+                                                placeholder="Enter new password (min. 8 characters)"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowNewPassword(!showNewPassword)}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                            >
+                                                {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Confirm New Password */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Confirm New Password
+                                        </label>
+                                        <div className="relative">
+                                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                            <input
+                                                type={showConfirmPassword ? "text" : "password"}
+                                                value={passwordData.new_password_confirmation}
+                                                onChange={(e) => setPasswordData({...passwordData, new_password_confirmation: e.target.value})}
+                                                required
+                                                className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition"
+                                                placeholder="Re-enter new password"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                            >
+                                                {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        type="submit"
+                                        disabled={passwordLoading}
+                                        className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {passwordLoading ? 'Changing Password...' : 'Change Password'}
+                                    </button>
+                                </form>
+                            </div>
+
+                            {/* Face Authentication Section */}
+                            <FaceAuthSettings 
+                                user={user} 
+                                onUpdate={handleUserUpdate}
+                            />
+
+                            {/* Delete Account Section */}
+                            <div className="bg-white rounded-xl shadow-sm border border-red-200 p-6">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <div className="p-2 bg-red-100 rounded-lg">
+                                        <Trash2 className="w-6 h-6 text-red-600" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-xl font-bold text-gray-900">Delete Account</h2>
+                                        <p className="text-sm text-gray-600">Permanently remove your account and all data</p>
+                                    </div>
+                                </div>
+
+                                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                                    <div className="flex gap-3">
+                                        <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                                        <div className="text-sm text-red-900">
+                                            <p className="font-medium mb-1">Warning: This action cannot be undone!</p>
+                                            <ul className="space-y-1 text-red-800">
+                                                <li>• Your profile and all personal data will be permanently deleted</li>
+                                                <li>• Your roadmaps, progress, and certificates will be removed</li>
+                                                <li>• Your organization memberships will be cancelled</li>
+                                                <li>• You will be immediately logged out</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setShowDeleteModal(true)}
+                                    className="w-full bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 transition flex items-center justify-center gap-2"
+                                >
+                                    <Trash2 className="w-5 h-5" />
+                                    Delete My Account
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
+
+            {/* Delete Account Confirmation Modal */}
+            {showDeleteModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+                        <div className="p-6">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="p-3 bg-red-100 rounded-full">
+                                    <AlertTriangle className="w-8 h-8 text-red-600" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-gray-900">Delete Account?</h3>
+                                    <p className="text-sm text-gray-600">This action is permanent and irreversible</p>
+                                </div>
+                            </div>
+
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                                <p className="text-sm text-red-900 font-medium mb-2">
+                                    All of the following will be permanently deleted:
+                                </p>
+                                <ul className="text-sm text-red-800 space-y-1">
+                                    <li>✗ Your profile and account information</li>
+                                    <li>✗ All roadmaps and progress tracking</li>
+                                    <li>✗ Certificates and achievements</li>
+                                    <li>✗ Organization memberships</li>
+                                    <li>✗ Skills assessment data</li>
+                                    <li>✗ Face authentication data</li>
+                                </ul>
+                            </div>
+
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Type <span className="font-bold text-red-600">DELETE</span> to confirm
+                                </label>
+                                <input
+                                    type="text"
+                                    value={deleteConfirmText}
+                                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                                    placeholder="Type DELETE"
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition"
+                                />
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => {
+                                        setShowDeleteModal(false);
+                                        setDeleteConfirmText('');
+                                    }}
+                                    disabled={deleteLoading}
+                                    className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleDeleteAccount}
+                                    disabled={deleteLoading || deleteConfirmText !== 'DELETE'}
+                                    className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {deleteLoading ? (
+                                        <>
+                                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                            Deleting...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Trash2 className="w-5 h-5" />
+                                            Delete Forever
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Resume Preview Modal */}
             {isResumeModalOpen && currentResume && (

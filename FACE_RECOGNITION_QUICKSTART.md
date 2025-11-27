@@ -48,31 +48,50 @@ npm run dev
 
 ## ✅ Test the Feature
 
-### Test Registration with Face Capture
+### Test Registration (Face Auth is Optional)
 
 1. Go to http://localhost:5173/register
-2. Fill in the registration form
-3. Click "Create Account"
-4. Face capture modal will appear
-5. Follow on-screen instructions (7 poses)
-6. Complete registration
+2. Fill in the registration form:
+   - Full Name
+   - Email Address (@president.ac.id or @student.president.ac.id)
+   - **Student ID** (e.g., 002202200123)
+   - Password (min 8 characters)
+3. **Toggle "Enable Face Authentication"** to enable/disable
+4. If enabled: Face capture modal appears after clicking "Create Account"
+5. If disabled: Account created without face auth
+6. You can enable face auth later from profile settings
 
 ### Test Login with Face Verification
 
 1. Go to http://localhost:5173/login
-2. Enter your email and password
-3. Face verification modal will appear
+2. Enter your **email OR student ID** and password
+3. If face auth is enabled, verification modal appears
 4. Look at camera and click "Verify Face"
 5. You'll be logged in if face matches
+6. If face doesn't match, you'll see an error with confidence score
+
+### Manage Face Authentication in Profile
+
+1. Log in to your account
+2. Go to **Profile** (from navbar) → **Security tab**
+3. Use the **Face Authentication** section:
+   - **Enable**: Click "Enable Face Authentication" → capture 5-7 images
+   - **Update**: Click "Update Face Data" → re-capture images
+   - **Disable**: Click "Disable" → remove face authentication
+4. Same page also has:
+   - **Change Password** functionality
+   - **Delete Account** option (with confirmation)
 
 ## 🎯 Key Features
 
-- ✅ **7 Face Captures** during registration for accuracy
+- ✅ **Toggle in Registration** - enable/disable face auth during signup
+- ✅ **Profile Management** - enable, update, or disable face auth anytime
+- ✅ **7 Face Captures** when enabling face auth for accuracy
 - ✅ **Guided Instructions** for each pose
 - ✅ **Real-time Countdown** before capture
 - ✅ **Two-Factor Authentication** with face verification
-- ✅ **Confidence Score** display after verification
-- ✅ **Optional Feature** - can register without face auth
+- ✅ **Confidence Score** display on both success and failure
+- ✅ **Clear Error Messages** when face doesn't match
 - ✅ **Secure Storage** - face encodings are encrypted
 
 ## 🛠️ Troubleshooting
@@ -92,6 +111,12 @@ npm run dev
 - Only one person in frame
 - Remove glasses if possible
 - Improve lighting
+
+### Face Does Not Match Error
+- Error shows confidence score (e.g., "Confidence: 45.2%")
+- Try better lighting conditions
+- Ensure you're the registered user
+- Can enable/update face auth from profile dashboard
 
 ## 📋 Requirements
 

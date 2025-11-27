@@ -22,6 +22,7 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
+            'student_id' => 'required|string|max:50|unique:students,student_id',
             'password' => 'required|string|min:8',
             'role' => 'required|in:student,alumni,admin',
             'phone' => 'nullable|string',
@@ -46,6 +47,7 @@ class AuthController extends Controller
             if ($request->role === 'student') {
                 Student::create([
                     'user_id' => $user->id,
+                    'student_id' => $request->student_id,
                     'major' => $request->major ?? 'Undeclared',
                     'career_goal' => $request->career_goal ?? 'Not specified',
                 ]);
@@ -101,7 +103,7 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'email' => 'required|string|email',
+            'login' => 'required|string',
             'password' => 'required|string|min:8',
         ]);
 
@@ -110,8 +112,35 @@ class AuthController extends Controller
         }
 
         try {
-            if (!$token = JWTAuth::attempt($request->only('email', 'password'))) {
-                return response()->json(['error' => 'Invalid credentials'], 401);
+            $login = $request->login;
+            $credentials = [];
+
+            // Check if login is email or student_id
+            if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
+                // Login with email
+                $credentials = [
+                    'email' => $login,
+                    'password' => $request->password,
+                ];
+                
+                if (!$token = JWTAuth::attempt($credentials)) {
+                    return response()->json(['error' => 'Invalid credentials'], 401);
+                }
+            } else {
+                // Login with student_id - find user by student_id
+                $student = Student::where('student_id', $login)->first();
+                
+                if (!$student) {
+                    return response()->json(['error' => 'Invalid credentials'], 401);
+                }
+                
+                $user = $student->user;
+                
+                if (!Hash::check($request->password, $user->password)) {
+                    return response()->json(['error' => 'Invalid credentials'], 401);
+                }
+                
+                $token = JWTAuth::fromUser($user);
             }
 
             $user = auth()->user();
@@ -364,6 +393,179 @@ class AuthController extends Controller
                 'error' => $e->getMessage(),
             ]);
             return redirect($errorUrl);
+        }
+    }
+
+    public function setupFaceAuth(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'face_images' => 'required|array|min:5',
+            'face_images.*' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 400);
+        }
+
+        try {
+            $user = auth()->user();
+
+            // Call face recognition service to encode faces
+            $faceServiceUrl = env('FACE_RECOGNITION_SERVICE_URL', 'http://localhost:5000');
+            
+            $response = Http::timeout(60)->post($faceServiceUrl . '/encode-faces', [
+                'images' => $request->face_images
+            ]);
+
+            if (!$response->successful()) {
+                Log::error('Face encoding service error: ' . $response->body());
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Face encoding service unavailable',
+                    'details' => $response->json('error') ?? 'Unknown error'
+                ], 500);
+            }
+
+            $result = $response->json();
+
+            if (!$result['success']) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Face encoding failed',
+                    'details' => $result['error'] ?? 'Unknown error'
+                ], 400);
+            }
+
+            // Store the face encoding
+            $user->face_encoding = json_encode($result['encoding']);
+            $user->face_auth_enabled = true;
+            $user->face_registered_at = now();
+            $user->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Face authentication enabled successfully',
+                'images_processed' => $result['images_processed'] ?? count($request->face_images),
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Setup face auth error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to set up face authentication: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function disableFaceAuth(Request $request)
+    {
+        try {
+            $user = auth()->user();
+
+            $user->face_encoding = null;
+            $user->face_auth_enabled = false;
+            $user->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Face authentication disabled successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Disable face auth error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to disable face authentication: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function changePassword(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'current_password' => 'required|string',
+            'new_password' => 'required|string|min:8',
+            'new_password_confirmation' => 'required|string|same:new_password',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 400);
+        }
+
+        try {
+            $user = auth()->user();
+
+            // Verify current password
+            if (!Hash::check($request->current_password, $user->password)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Current password is incorrect'
+                ], 401);
+            }
+
+            // Update password
+            $user->password = Hash::make($request->new_password);
+            $user->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Password changed successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Change password error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to change password: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function deleteAccount(Request $request)
+    {
+        try {
+            $user = auth()->user();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found'
+                ], 404);
+            }
+
+            // Delete related records based on role
+            if ($user->role === 'student') {
+                // Delete student-specific data
+                $user->student()->delete();
+            } elseif ($user->role === 'alumni') {
+                // Delete alumni-specific data
+                $user->alumni()->delete();
+            }
+
+            // Delete face recognition data if exists
+            if ($user->face_encoding) {
+                $user->face_encoding = null;
+                $user->face_auth_enabled = false;
+                $user->save();
+            }
+
+            // Finally delete the user
+            $user->delete();
+
+            // Invalidate token
+            auth()->logout();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Account deleted successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Delete account error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to delete account: ' . $e->getMessage()
+            ], 500);
         }
     }
 }

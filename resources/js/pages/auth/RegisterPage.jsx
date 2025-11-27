@@ -11,6 +11,7 @@ export default function RegisterPage() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    student_id: '',
     password: '',
     password_confirmation: '',
     role: 'student', // student, alumni
@@ -21,6 +22,7 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [showFaceCapture, setShowFaceCapture] = useState(false);
   const [faceImages, setFaceImages] = useState(null);
+  const [enableFaceAuth, setEnableFaceAuth] = useState(false);
 
   // Password strength calculation
   const passwordStrength = useMemo(() => {
@@ -67,8 +69,13 @@ export default function RegisterPage() {
       return;
     }
 
-    // Show face capture modal
-    setShowFaceCapture(true);
+    // If face auth is enabled, show face capture modal
+    if (enableFaceAuth) {
+      setShowFaceCapture(true);
+    } else {
+      // Register without face authentication
+      registerWithoutFace();
+    }
   };
 
   const handleFaceCaptureComplete = async (capturedImages) => {
@@ -195,7 +202,7 @@ export default function RegisterPage() {
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="John Doe"
+                  placeholder="Reyner"
                   required
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition"
                 />
@@ -220,6 +227,27 @@ export default function RegisterPage() {
               </div>
               <p className="mt-1 text-xs text-gray-500">
                 Use your President University email (@president.ac.id or @student.president.ac.id)
+              </p>
+            </div>
+
+            {/* Student ID */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Student ID
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={formData.student_id}
+                  onChange={(e) => setFormData({ ...formData, student_id: e.target.value })}
+                  placeholder="e.g., 002202200123"
+                  required
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition"
+                />
+              </div>
+              <p className="mt-1 text-xs text-gray-500">
+                Your unique student identification number
               </p>
             </div>
 
@@ -310,6 +338,33 @@ export default function RegisterPage() {
                 <a href="#" className="text-primary-600 hover:text-primary-700 font-medium">Privacy Policy</a>
               </span>
             </label>
+
+            {/* Face Authentication Toggle */}
+            <div className="pt-4 border-t border-gray-200">
+              <label className="flex items-start gap-3 cursor-pointer group">
+                <div className="relative inline-flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={enableFaceAuth}
+                    onChange={(e) => setEnableFaceAuth(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-900">Enable Face Authentication</span>
+                    <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">Optional</span>
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1">
+                    {enableFaceAuth 
+                      ? 'You will capture 5-7 face images after registration for two-factor authentication'
+                      : 'You can enable this later from your profile settings'
+                    }
+                  </p>
+                </div>
+              </label>
+            </div>
 
             {/* Submit Button */}
             <button
