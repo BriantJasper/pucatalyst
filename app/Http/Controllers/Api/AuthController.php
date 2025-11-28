@@ -19,6 +19,9 @@ class AuthController extends Controller
 {
     public function register(Request $request)
     {
+        // Increase time limit for face processing during registration
+        set_time_limit(120); // 2 minutes
+        
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
@@ -61,29 +64,51 @@ class AuthController extends Controller
             // Process face images if provided
             if ($request->has('face_images') && is_array($request->face_images) && count($request->face_images) >= 5) {
                 try {
-                    $faceServiceUrl = env('FACE_RECOGNITION_SERVICE_URL', 'http://localhost:5000');
+                    Log::info('Starting face encoding process for user: ' . $user->id);
+                    Log::info('Number of face images: ' . count($request->face_images));
                     
-                    $response = Http::timeout(30)->post($faceServiceUrl . '/encode-faces', [
+                    $faceServiceUrl = env('FACE_RECOGNITION_SERVICE_URL', 'http://localhost:5000');
+                    Log::info('Face service URL: ' . $faceServiceUrl);
+                    
+                    // Increased timeout to 90 seconds for augmentation processing
+                    $response = Http::timeout(90)->post($faceServiceUrl . '/encode-faces', [
                         'images' => $request->face_images
                     ]);
+
+                    Log::info('Face service response status: ' . $response->status());
+                    Log::info('Face service response body: ' . $response->body());
 
                     if ($response->successful() && $response->json('success')) {
                         $encoding = $response->json('encoding');
                         
-                        $user->update([
-                            'face_encoding' => json_encode($encoding),
+                        Log::info('Encoding received, length: ' . (is_array($encoding) ? count($encoding) : 'not array'));
+                        
+                        $encodingJson = json_encode($encoding);
+                        Log::info('Encoding JSON length: ' . strlen($encodingJson));
+                        
+                        $updated = $user->update([
+                            'face_encoding' => $encodingJson,
                             'face_auth_enabled' => true,
                             'face_registered_at' => now(),
                         ]);
 
-                        Log::info('Face encoding saved for user: ' . $user->id);
+                        Log::info('User update result: ' . ($updated ? 'SUCCESS' : 'FAILED'));
+                        
+                        // Verify the data was saved
+                        $user->refresh();
+                        Log::info('Verified - face_auth_enabled: ' . ($user->face_auth_enabled ? 'true' : 'false'));
+                        Log::info('Verified - face_encoding length: ' . strlen($user->face_encoding ?? ''));
+
                     } else {
                         Log::warning('Face encoding failed: ' . $response->body());
                     }
                 } catch (\Exception $e) {
                     Log::error('Face recognition service error: ' . $e->getMessage());
+                    Log::error('Stack trace: ' . $e->getTraceAsString());
                     // Continue registration even if face recognition fails
                 }
+            } else {
+                Log::info('No face images provided or insufficient images for user: ' . $user->id);
             }
 
             $token = JWTAuth::fromUser($user);
@@ -183,25 +208,42 @@ class AuthController extends Controller
         }
 
         try {
+            Log::info('Face verification request received');
+            Log::info('Temp token present: ' . ($request->temp_token ? 'YES' : 'NO'));
+            
             // Validate temp token and get user
             JWTAuth::setToken($request->temp_token);
             $user = JWTAuth::authenticate();
 
             if (!$user) {
+                Log::warning('Invalid token during face verification');
                 return response()->json(['error' => 'Invalid token'], 401);
             }
 
+            Log::info('User authenticated: ' . $user->id);
+            Log::info('Face auth enabled: ' . ($user->face_auth_enabled ? 'true' : 'false'));
+            Log::info('Face encoding exists: ' . ($user->face_encoding ? 'YES (' . strlen($user->face_encoding) . ' chars)' : 'NO'));
+
             if (!$user->face_auth_enabled || !$user->face_encoding) {
+                Log::warning('Face authentication not set up for user: ' . $user->id);
                 return response()->json(['error' => 'Face authentication not set up'], 400);
             }
 
             // Call face recognition service
             $faceServiceUrl = env('FACE_RECOGNITION_SERVICE_URL', 'http://localhost:5000');
             
+            Log::info('Calling face service at: ' . $faceServiceUrl);
+            
+            $storedEncoding = json_decode($user->face_encoding, true);
+            Log::info('Stored encoding array length: ' . (is_array($storedEncoding) ? count($storedEncoding) : 'not array'));
+            
             $response = Http::timeout(30)->post($faceServiceUrl . '/verify-face', [
                 'image' => $request->face_image,
-                'stored_encoding' => json_decode($user->face_encoding, true)
+                'stored_encoding' => $storedEncoding
             ]);
+
+            Log::info('Face service response status: ' . $response->status());
+            Log::info('Face service response: ' . $response->body());
 
             if (!$response->successful()) {
                 Log::error('Face verification service error: ' . $response->body());
@@ -398,6 +440,9 @@ class AuthController extends Controller
 
     public function setupFaceAuth(Request $request)
     {
+        // Increase time limit for face processing (with augmentation takes longer)
+        set_time_limit(120); // 2 minutes instead of 30 seconds
+        
         $validator = Validator::make($request->all(), [
             'face_images' => 'required|array|min:5',
             'face_images.*' => 'required|string',
@@ -410,10 +455,11 @@ class AuthController extends Controller
         try {
             $user = auth()->user();
 
-            // Call face recognition service to encode faces
+            // Call face recognition service to encode faces with extended timeout
             $faceServiceUrl = env('FACE_RECOGNITION_SERVICE_URL', 'http://localhost:5000');
             
-            $response = Http::timeout(60)->post($faceServiceUrl . '/encode-faces', [
+            // Increased timeout to 90 seconds for augmentation processing
+            $response = Http::timeout(90)->post($faceServiceUrl . '/encode-faces', [
                 'images' => $request->face_images
             ]);
 
