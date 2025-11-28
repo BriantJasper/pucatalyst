@@ -9,7 +9,7 @@ const FaceVerificationComponent = ({ onVerify, onCancel, userEmail }) => {
     const [cameraReady, setCameraReady] = useState(false);
     const [isVerifying, setIsVerifying] = useState(false);
     const [error, setError] = useState(null);
-    const [countdown, setCountdown] = useState(null);
+    const [countdown, setCountdown] = useState(3);
     const [capturedImage, setCapturedImage] = useState(null);
 
     useEffect(() => {
@@ -18,6 +18,24 @@ const FaceVerificationComponent = ({ onVerify, onCancel, userEmail }) => {
             stopCamera();
         };
     }, []);
+
+    // Auto-verify after camera is ready
+    useEffect(() => {
+        if (!cameraReady || isVerifying) return;
+
+        const countdownInterval = setInterval(() => {
+            setCountdown(prev => {
+                if (prev <= 1) {
+                    clearInterval(countdownInterval);
+                    captureAndVerify();
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+
+        return () => clearInterval(countdownInterval);
+    }, [cameraReady]);
 
     const startCamera = async () => {
         try {
@@ -72,8 +90,29 @@ const FaceVerificationComponent = ({ onVerify, onCancel, userEmail }) => {
             const context = canvas.getContext('2d');
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            // Convert to base64
-            const imageData = canvas.toDataURL('image/jpeg', 0.9);
+            // Center oval crop - only send the center 40%x60% region
+            const ovalWidthRatio = 0.4; // 40% of video width
+            const ovalHeightRatio = 0.6; // 60% of video height
+            
+            const ovalWidth = canvas.width * ovalWidthRatio;
+            const ovalHeight = canvas.height * ovalHeightRatio;
+            const ovalX = (canvas.width - ovalWidth) / 2;
+            const ovalY = (canvas.height - ovalHeight) / 2;
+            
+            // Create cropped canvas with only the center oval region
+            const croppedCanvas = document.createElement('canvas');
+            croppedCanvas.width = ovalWidth;
+            croppedCanvas.height = ovalHeight;
+            const croppedContext = croppedCanvas.getContext('2d');
+            
+            croppedContext.drawImage(
+                canvas,
+                ovalX, ovalY, ovalWidth, ovalHeight,
+                0, 0, ovalWidth, ovalHeight
+            );
+            
+            // Convert cropped image to base64
+            const imageData = croppedCanvas.toDataURL('image/jpeg', 0.9);
             setCapturedImage(imageData);
             
             // Send to verification
@@ -87,25 +126,11 @@ const FaceVerificationComponent = ({ onVerify, onCancel, userEmail }) => {
         }
     };
 
-    const handleCapture = () => {
-        setCountdown(3);
-        
-        const countdownInterval = setInterval(() => {
-            setCountdown(prev => {
-                if (prev <= 1) {
-                    clearInterval(countdownInterval);
-                    captureAndVerify();
-                    return null;
-                }
-                return prev - 1;
-            });
-        }, 1000);
-    };
-
     const handleRetry = () => {
         setCapturedImage(null);
         setError(null);
         setIsVerifying(false);
+        setCountdown(3);
         startCamera();
     };
 
@@ -155,15 +180,6 @@ const FaceVerificationComponent = ({ onVerify, onCancel, userEmail }) => {
                                         className="w-full h-full object-cover"
                                     />
                                     <canvas ref={canvasRef} className="hidden" />
-                                    
-                                    {/* Countdown Overlay */}
-                                    {countdown !== null && (
-                                        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                                            <div className="text-white text-8xl font-bold animate-pulse">
-                                                {countdown}
-                                            </div>
-                                        </div>
-                                    )}
 
                                     {/* Camera Status */}
                                     {!cameraReady && (
@@ -175,18 +191,45 @@ const FaceVerificationComponent = ({ onVerify, onCancel, userEmail }) => {
                                         </div>
                                     )}
 
-                                    {/* Face Guide Overlay */}
-                                    {cameraReady && !countdown && (
+                                    {/* Face Guide Overlay with Loading Circle */}
+                                    {cameraReady && countdown > 0 && (
                                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                            <div className="w-64 h-80 border-4 border-blue-500 rounded-full opacity-50"></div>
+                                            <div className="relative">
+                                                {/* Oval guide */}
+                                                <div className="w-64 h-80 border-4 border-blue-500 rounded-full opacity-50"></div>
+                                                
+                                                {/* Loading circle animation */}
+                                                <div className="absolute inset-0 flex items-center justify-center">
+                                                    <svg className="w-72 h-88" style={{ transform: 'rotate(-90deg)' }}>
+                                                        <circle
+                                                            cx="144"
+                                                            cy="176"
+                                                            r="140"
+                                                            stroke="#3b82f6"
+                                                            strokeWidth="6"
+                                                            fill="none"
+                                                            strokeDasharray="880"
+                                                            strokeDashoffset={880 * (countdown / 3)}
+                                                            className="transition-all duration-1000 ease-linear"
+                                                        />
+                                                    </svg>
+                                                </div>
+                                                
+                                                {/* Countdown number */}
+                                                <div className="absolute inset-0 flex items-center justify-center">
+                                                    <div className="text-white text-6xl font-bold bg-black bg-opacity-50 rounded-full w-24 h-24 flex items-center justify-center">
+                                                        {countdown}
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     )}
 
                                     {/* Instruction */}
-                                    {cameraReady && !countdown && (
+                                    {cameraReady && countdown > 0 && (
                                         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-6">
                                             <p className="text-white text-center text-lg font-semibold">
-                                                Position your face in the circle
+                                                Position your face in the circle - Verifying in {countdown}...
                                             </p>
                                         </div>
                                     )}
@@ -221,51 +264,36 @@ const FaceVerificationComponent = ({ onVerify, onCancel, userEmail }) => {
                             </h3>
                             <ul className="text-sm text-blue-800 space-y-1">
                                 <li>• Look directly at the camera</li>
+                                <li>• Keep your face inside the blue oval</li>
                                 <li>• Ensure your face is well-lit</li>
                                 <li>• Remove glasses if possible</li>
-                                <li>• Keep your face centered in the frame</li>
                                 <li>• Stay still during capture</li>
                             </ul>
+                            <div className="mt-3 bg-purple-100 border border-purple-300 rounded p-2">
+                                <p className="text-xs text-purple-800">
+                                    💡 <strong>Center Focus:</strong> Only your face inside the oval will be verified. Background faces are ignored.
+                                </p>
+                            </div>
                         </div>
                     )}
 
-                    {/* Action Buttons */}
-                    {!capturedImage ? (
+                    {/* Action Buttons - Only show retry on error */}
+                    {!isVerifying && error && (
                         <div className="flex gap-3 justify-end">
                             <button
                                 onClick={onCancel}
-                                disabled={isVerifying || countdown !== null}
-                                className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
-                                onClick={handleCapture}
-                                disabled={!cameraReady || isVerifying || countdown !== null}
-                                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                                onClick={handleRetry}
+                                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center"
                             >
                                 <Camera className="w-5 h-5 mr-2" />
-                                Verify Face
+                                Try Again
                             </button>
                         </div>
-                    ) : (
-                        !isVerifying && error && (
-                            <div className="flex gap-3 justify-end">
-                                <button
-                                    onClick={onCancel}
-                                    className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleRetry}
-                                    className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center"
-                                >
-                                    <Camera className="w-5 h-5 mr-2" />
-                                    Try Again
-                                </button>
-                            </div>
-                        )
                     )}
 
                     {/* Security Note */}

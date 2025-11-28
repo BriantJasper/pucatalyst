@@ -75,8 +75,8 @@ npm run dev
 1. Log in to your account
 2. Go to **Profile** (from navbar) → **Security tab**
 3. Use the **Face Authentication** section:
-   - **Enable**: Click "Enable Face Authentication" → capture 5-7 images
-   - **Update**: Click "Update Face Data" → re-capture images
+   - **Enable**: Click "Enable Face Authentication" → capture 12-20 images with guided poses
+   - **Update**: Click "Update Face Data" → re-capture 12-20 images
    - **Disable**: Click "Disable" → remove face authentication
 4. Same page also has:
    - **Change Password** functionality
@@ -86,9 +86,13 @@ npm run dev
 
 - ✅ **Toggle in Registration** - enable/disable face auth during signup
 - ✅ **Profile Management** - enable, update, or disable face auth anytime
-- ✅ **7 Face Captures** when enabling face auth for accuracy
-- ✅ **Guided Instructions** for each pose
+- ✅ **12-20 Face Captures** with 20 different poses for high accuracy
+- ✅ **Data Augmentation** - each image multiplied 7x (12 images → 84 samples, 20 images → 140 samples)
+- ✅ **Guided Instructions** for each pose (straight, tilt, smile, distance, angles, expressions)
+- ✅ **Real-time Face Detection** with visual rectangles around detected faces
+- ✅ **Multiple Face Detection** - warns and prevents capture if >1 person in frame
 - ✅ **Real-time Countdown** before capture
+- ✅ **Triple Validation** - combined similarity + distance + pixel matching
 - ✅ **Two-Factor Authentication** with face verification
 - ✅ **Confidence Score** display on both success and failure
 - ✅ **Clear Error Messages** when face doesn't match
@@ -132,11 +136,15 @@ npm run dev
 
 Default settings in `face_recognition_service/.env`:
 ```env
-PORT=5000          # Service port
-TOLERANCE=0.85     # Similarity threshold (higher = stricter, for OpenCV)
+PORT=5000              # Service port
+TOLERANCE=0.92         # Combined similarity threshold (92%)
+MAX_DISTANCE=0.35      # Euclidean distance threshold (relaxed for same person)
+MIN_PIXEL_SIMILARITY=0.88  # Raw pixel similarity (88%)
 ```
 
-**Backend:** OpenCV-based (no dlib compilation needed!)
+**Backend:** OpenCV with data augmentation (7x per image)
+**Minimum Images:** 8 captured (with augmentation = 56 samples minimum)
+**Recommended:** 12-20 images for best accuracy (84-140 samples)
 
 ## 📚 Full Documentation
 
