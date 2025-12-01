@@ -86,7 +86,7 @@ def detect_and_extract_face(image_array):
     if len(faces) > 1:
         # Sort by face area (w * h) and take the largest
         faces = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)
-        print(f"  ℹ️ Multiple faces detected, using largest face")
+        print(f"  [INFO] Multiple faces detected, using largest face")
     
     # Extract the face region
     x, y, w, h = faces[0]
@@ -254,7 +254,7 @@ def encode_faces():
         data = request.get_json()
         
         if not data or 'images' not in data:
-            print(f"❌ Error: No images provided in request")
+            print(f"[ERROR] No images provided in request")
             return jsonify({
                 'success': False,
                 'error': 'No images provided'
@@ -263,16 +263,16 @@ def encode_faces():
         images = data['images']
         
         if not isinstance(images, list) or len(images) == 0:
-            print(f"❌ Error: Images not a list or empty")
+            print(f"[ERROR] Images not a list or empty")
             return jsonify({
                 'success': False,
                 'error': 'Images must be a non-empty array'
             }), 400
         
-        print(f"📸 Received {len(images)} images for encoding")
+        print(f"[INFO] Received {len(images)} images for encoding")
         
         if len(images) < 5:
-            print(f"❌ Error: Only {len(images)} images provided (minimum 5)")
+            print(f"[ERROR] Only {len(images)} images provided (minimum 5)")
             return jsonify({
                 'success': False,
                 'error': 'Please provide at least 5 images for better accuracy'
@@ -289,7 +289,7 @@ def encode_faces():
                 face_img, error = detect_and_extract_face(image_array)
                 
                 if error:
-                    print(f"  ❌ Image {idx + 1}: {error}")
+                    print(f"  [ERROR] Image {idx + 1}: {error}")
                     errors.append(f"Image {idx + 1}: {error}")
                     continue
                 
@@ -302,17 +302,17 @@ def encode_faces():
                     encodings.append(encoding)
                 
                 processed_count += 1
-                print(f"  ✅ Image {idx + 1}: Processed ({len(augmented_images)} augmented samples)")
+                print(f"  [OK] Image {idx + 1}: Processed ({len(augmented_images)} augmented samples)")
                 
             except Exception as e:
-                print(f"  ❌ Image {idx + 1}: Exception - {str(e)}")
+                print(f"  [ERROR] Image {idx + 1}: Exception - {str(e)}")
                 errors.append(f"Image {idx + 1}: {str(e)}")
         
-        print(f"\n📊 Processing complete: {processed_count}/{len(images)} images valid")
+        print(f"\n[STATS] Processing complete: {processed_count}/{len(images)} images valid")
         print(f"   Total augmented samples: {len(encodings)}")
         
         if processed_count < 3:
-            print(f"❌ Error: Only {processed_count} valid images (minimum 3 required)")
+            print(f"[ERROR] Only {processed_count} valid images (minimum 3 required)")
             return jsonify({
                 'success': False,
                 'error': 'Not enough valid face images (minimum 3 required)',
@@ -323,7 +323,7 @@ def encode_faces():
         # Average the encodings (now includes augmented versions)
         avg_encoding = np.mean(encodings, axis=0)
         
-        print(f"✅ Encoding complete: {len(encodings)} samples averaged")
+        print(f"[SUCCESS] Encoding complete: {len(encodings)} samples averaged")
         
         return jsonify({
             'success': True,
@@ -335,7 +335,7 @@ def encode_faces():
         }), 200
         
     except Exception as e:
-        print(f"❌ Exception in encode_faces: {str(e)}")
+        print(f"[ERROR] Exception in encode_faces: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({
@@ -364,7 +364,7 @@ def verify_face():
         
         # Reject if multiple faces detected during verification (strict mode)
         if len(faces) > 1:
-            print(f"⚠️ Verification rejected: {len(faces)} faces detected")
+            print(f"[WARNING] Verification rejected: {len(faces)} faces detected")
             return jsonify({
                 'success': False,
                 'error': f'Multiple faces detected ({len(faces)} people). Please ensure only you are visible in the frame.',
@@ -534,10 +534,10 @@ if __name__ == '__main__':
     print(f"  - Image Size: {IMAGE_SIZE}")
     print(f"  - Data Augmentation: ENABLED (7x per image)")
     print(f"\nFeatures:")
-    print(f"  ✓ Triple validation (combined + distance + pixel)")
-    print(f"  ✓ Data augmentation (brightness, rotation, contrast, blur)")
-    print(f"  ✓ Real-time face detection overlay")
-    print(f"  ✓ ~2400 dimensional face encoding")
+    print(f"  [+] Triple validation (combined + distance + pixel)")
+    print(f"  [+] Data augmentation (brightness, rotation, contrast, blur)")
+    print(f"  [+] Real-time face detection overlay")
+    print(f"  [+] ~2400 dimensional face encoding")
     print(f"\nNote: This version uses OpenCV for face detection (easier to install)")
     
     app.run(host='0.0.0.0', port=port, debug=debug)

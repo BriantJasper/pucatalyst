@@ -151,6 +151,7 @@ class AuthController extends Controller
                 if (!$token = JWTAuth::attempt($credentials)) {
                     return response()->json(['error' => 'Invalid credentials'], 401);
                 }
+                $user = auth()->user();
             } else {
                 // Login with student_id - find user by student_id
                 $student = Student::where('student_id', $login)->first();
@@ -168,7 +169,7 @@ class AuthController extends Controller
                 $token = JWTAuth::fromUser($user);
             }
 
-            $user = auth()->user();
+            // $user is now set in both branches above
             
             // Check if face authentication is enabled for this user
             if ($user->face_auth_enabled) {
