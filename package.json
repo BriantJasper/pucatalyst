@@ -3,7 +3,7 @@
     "type": "module",
     "scripts": {
         "dev": "vite",
-        "build": "npm rebuild rollup && vite build",
+        "build": "npm install @rollup/rollup-linux-x64-gnu --no-save && vite build",
         "preview": "vite preview",
         "postinstall": "npm rebuild rollup"
     },
