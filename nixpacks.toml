@@ -3,9 +3,9 @@ nixPkgs = ['...', 'python3']
 
 [phases.install]
 cmds = [
-    'rm -f package-lock.json',
-    'npm install --legacy-peer-deps',
-    'composer install --optimize-autoloader --no-dev'
+    'rm -rf node_modules package-lock.json',
+    'npm install --legacy-peer-deps --force',
+    'composer install --optimize-autoloader --no-dev --no-interaction'
 ]
 
 [phases.build]
