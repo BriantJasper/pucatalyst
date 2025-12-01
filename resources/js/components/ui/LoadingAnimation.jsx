@@ -96,9 +96,12 @@ const LoadingAnimation = ({ onLoadingComplete }) => {
                                         : "scale-100 opacity-100"
                                 }`}
                                 style={{
-                                    animation: isComplete
+                                    animationName: isComplete
                                         ? "none"
-                                        : `orbit ${6}s linear infinite`,
+                                        : "orbit",
+                                    animationDuration: "6s",
+                                    animationTimingFunction: "linear",
+                                    animationIterationCount: "infinite",
                                     animationDelay: `${-i * 1}s`,
                                     top: "50%",
                                     left: "50%",
@@ -108,9 +111,12 @@ const LoadingAnimation = ({ onLoadingComplete }) => {
                                 <div
                                     className="bg-white/10 backdrop-blur-sm p-3 rounded-full border-2 border-white/20 shadow-lg"
                                     style={{
-                                        animation: isComplete
+                                        animationName: isComplete
                                             ? "none"
-                                            : `counter-rotate ${6}s linear infinite`,
+                                            : "counter-rotate",
+                                        animationDuration: "6s",
+                                        animationTimingFunction: "linear",
+                                        animationIterationCount: "infinite",
                                         animationDelay: `${-i * 1}s`,
                                     }}
                                 >
@@ -124,20 +130,24 @@ const LoadingAnimation = ({ onLoadingComplete }) => {
 
                     <div
                         className={`absolute inset-0 border-4 border-dashed border-purple-400/30 rounded-full transition-all duration-700 ${
-                            isComplete
-                                ? "scale-150 opacity-0"
-                                : "animate-spin opacity-100"
+                            isComplete ? "scale-150 opacity-0" : "opacity-100"
                         }`}
-                        style={{ animationDuration: "20s" }}
+                        style={{
+                            animationName: isComplete ? "none" : "spin",
+                            animationDuration: "20s",
+                            animationTimingFunction: "linear",
+                            animationIterationCount: "infinite",
+                        }}
                     />
                     <div
                         className={`absolute inset-8 border-4 border-dashed border-pink-400/30 rounded-full transition-all duration-700 ${
-                            isComplete
-                                ? "scale-150 opacity-0"
-                                : "animate-spin opacity-100"
+                            isComplete ? "scale-150 opacity-0" : "opacity-100"
                         }`}
                         style={{
+                            animationName: isComplete ? "none" : "spin",
                             animationDuration: "15s",
+                            animationTimingFunction: "linear",
+                            animationIterationCount: "infinite",
                             animationDirection: "reverse",
                         }}
                     />

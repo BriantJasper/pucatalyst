@@ -13,6 +13,7 @@ import {
     Sparkles,
 } from "lucide-react";
 import LoadingAnimation from "../components/ui/LoadingAnimation";
+import Roadmap3D from "../components/Roadmap3D";
 
 export default function LandingPage() {
     const [showLoading, setShowLoading] = useState(true);
@@ -31,32 +32,33 @@ export default function LandingPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-purple-50">
-            <nav className="bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50">
+        <div className="min-h-screen bg-[#0B0B15] text-white selection:bg-primary-500 selection:text-white">
+            {/* Navbar */}
+            <nav className="bg-[#0B0B15]/80 backdrop-blur-md border-b border-white/10 sticky top-0 z-50">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16">
                         <div className="flex items-center gap-2">
-                            <Rocket className="w-8 h-8 text-primary-600" />
-                            <span className="text-2xl font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
+                            <Rocket className="w-8 h-8 text-primary-400" />
+                            <span className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-secondary-400 bg-clip-text text-transparent">
                                 PU Catalyst
                             </span>
                         </div>
                         <div className="hidden md:flex items-center gap-6">
                             <a
                                 href="#features"
-                                className="text-gray-700 hover:text-primary-600 transition"
+                                className="text-gray-300 hover:text-primary-400 transition"
                             >
                                 Features
                             </a>
                             <Link
                                 to="/login"
-                                className="text-gray-700 hover:text-primary-600 transition"
+                                className="text-gray-300 hover:text-primary-400 transition"
                             >
                                 Login
                             </Link>
                             <Link
                                 to="/register"
-                                className="bg-primary-600 text-white px-5 py-2 rounded-lg hover:bg-primary-700 transition"
+                                className="bg-primary-600 text-white px-5 py-2 rounded-lg hover:bg-primary-500 transition shadow-[0_0_15px_rgba(37,99,235,0.5)]"
                             >
                                 Get Started
                             </Link>
@@ -65,212 +67,206 @@ export default function LandingPage() {
                 </div>
             </nav>
 
+            {/* Hero Section */}
             <section className="relative pt-20 pb-32 px-4 overflow-hidden">
-                <div className="max-w-7xl mx-auto">
-                    <div className="text-center max-w-4xl mx-auto">
-                        <div className="inline-flex items-center gap-2 bg-primary-100 text-primary-700 px-4 py-2 rounded-full text-sm font-medium mb-6">
-                            <Sparkles className="w-4 h-4" />
-                            <span>AI-Powered University Roadmap</span>
+                {/* Background Elements */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-7xl pointer-events-none">
+                    <div className="absolute top-20 left-10 w-72 h-72 bg-primary-600/20 rounded-full blur-[100px]"></div>
+                    <div className="absolute bottom-20 right-10 w-96 h-96 bg-secondary-600/20 rounded-full blur-[100px]"></div>
+                </div>
+
+                <div className="max-w-7xl mx-auto relative z-10">
+                    <div className="grid lg:grid-cols-2 gap-12 items-center">
+                        <div className="text-center lg:text-left">
+                            <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 text-primary-300 px-4 py-2 rounded-full text-sm font-medium mb-6 backdrop-blur-sm">
+                                <Sparkles className="w-4 h-4" />
+                                <span>AI-Powered University Roadmap</span>
+                            </div>
+                            <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
+                                Reach for the{" "}
+                                <span className="bg-gradient-to-r from-primary-400 via-secondary-400 to-primary-400 bg-clip-text text-transparent animate-gradient">
+                                    Stars
+                                </span>{" "}
+                                in Your Career
+                            </h1>
+                            <p className="text-xl text-gray-400 mb-10 leading-relaxed">
+                                Navigate your university journey like a
+                                constellation. Get AI-powered guidance to
+                                connect the dots between your skills,
+                                organizations, and dream career.
+                            </p>
+                            <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+                                <Link
+                                    to="/register"
+                                    className="bg-primary-600 text-white px-8 py-4 rounded-xl hover:bg-primary-500 transition flex items-center justify-center gap-2 text-lg font-semibold shadow-[0_0_20px_rgba(37,99,235,0.4)] hover:shadow-[0_0_30px_rgba(37,99,235,0.6)]"
+                                >
+                                    Launch Roadmap
+                                    <Rocket className="w-5 h-5" />
+                                </Link>
+                                <a
+                                    href="#features"
+                                    className="bg-white/5 text-white px-8 py-4 rounded-xl hover:bg-white/10 transition border border-white/10 text-lg font-semibold backdrop-blur-sm"
+                                >
+                                    Explore Universe
+                                </a>
+                            </div>
                         </div>
-                        <h1 className="text-5xl md:text-7xl font-bold text-gray-900 mb-6 leading-tight">
-                            Your{" "}
-                            <span className="bg-gradient-to-r from-primary-600 via-secondary-600 to-primary-600 bg-clip-text text-transparent">
-                                Career Journey
-                            </span>{" "}
-                            Starts Here
-                        </h1>
-                        <p className="text-xl text-gray-600 mb-10 leading-relaxed">
-                            Get AI-powered recommendations on organizations,
-                            certificates, skills, and projects based on
-                            successful alumni patterns.
-                        </p>
-                        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                            <Link
-                                to="/register"
-                                className="bg-primary-600 text-white px-8 py-4 rounded-xl hover:bg-primary-700 transition flex items-center justify-center gap-2 text-lg font-semibold shadow-lg"
-                            >
-                                Start Your Roadmap
-                                <ArrowRight className="w-5 h-5" />
-                            </Link>
-                            <a
-                                href="#features"
-                                className="bg-white text-gray-900 px-8 py-4 rounded-xl hover:bg-gray-50 transition border-2 border-gray-200 text-lg font-semibold"
-                            >
-                                Learn More
-                            </a>
+
+                        <div className="relative hidden lg:block">
+                            <div className="absolute -inset-1 bg-gradient-to-r from-primary-500 to-secondary-500 rounded-2xl blur opacity-30"></div>
+                            <Roadmap3D />
+                        </div>
+                        {/* Mobile view for 3D map */}
+                        <div className="relative lg:hidden">
+                            <div className="absolute -inset-1 bg-gradient-to-r from-primary-500 to-secondary-500 rounded-2xl blur opacity-30"></div>
+                            <Roadmap3D />
                         </div>
                     </div>
                 </div>
             </section>
 
-            <section className="py-16 bg-white">
+            {/* Stats Section */}
+            <section className="py-16 border-y border-white/5 bg-white/5 backdrop-blur-sm">
                 <div className="max-w-7xl mx-auto px-4">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
                         <div className="text-center">
-                            <div className="text-4xl md:text-5xl font-bold text-primary-600 mb-2">
+                            <div className="text-4xl md:text-5xl font-bold text-white mb-2 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">
                                 1000+
                             </div>
-                            <div className="text-gray-600 font-medium">
-                                Students Guided
+                            <div className="text-gray-400 font-medium">
+                                Stars Aligned
                             </div>
                         </div>
                         <div className="text-center">
-                            <div className="text-4xl md:text-5xl font-bold text-primary-600 mb-2">
+                            <div className="text-4xl md:text-5xl font-bold text-white mb-2 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">
                                 500+
                             </div>
-                            <div className="text-gray-600 font-medium">
-                                Alumni Contributors
+                            <div className="text-gray-400 font-medium">
+                                Alumni Guides
                             </div>
                         </div>
                         <div className="text-center">
-                            <div className="text-4xl md:text-5xl font-bold text-primary-600 mb-2">
+                            <div className="text-4xl md:text-5xl font-bold text-white mb-2 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">
                                 50+
                             </div>
-                            <div className="text-gray-600 font-medium">
-                                Career Paths
+                            <div className="text-gray-400 font-medium">
+                                Galaxies Explored
                             </div>
                         </div>
                         <div className="text-center">
-                            <div className="text-4xl md:text-5xl font-bold text-primary-600 mb-2">
+                            <div className="text-4xl md:text-5xl font-bold text-white mb-2 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">
                                 95%
                             </div>
-                            <div className="text-gray-600 font-medium">
-                                Success Rate
+                            <div className="text-gray-400 font-medium">
+                                Mission Success
                             </div>
                         </div>
                     </div>
                 </div>
             </section>
 
-            <section id="features" className="py-24 px-4">
-                <div className="max-w-7xl mx-auto">
+            {/* Features Section */}
+            <section id="features" className="py-24 px-4 relative">
+                <div className="absolute top-1/2 left-0 w-96 h-96 bg-purple-600/10 rounded-full blur-[120px] pointer-events-none"></div>
+                <div className="max-w-7xl mx-auto relative z-10">
                     <div className="text-center mb-16">
-                        <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-                            Everything You Need to Succeed
+                        <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
+                            Your Mission Control
                         </h2>
-                        <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                            AI-powered tools and insights to guide your
-                            university journey
+                        <p className="text-xl text-gray-400 max-w-2xl mx-auto">
+                            Advanced tools to navigate the vast universe of
+                            career opportunities
                         </p>
                     </div>
 
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                        <div className="bg-white p-8 rounded-2xl border border-gray-200 hover:border-primary-300 hover:shadow-xl transition group">
-                            <div className="w-16 h-16 bg-primary-100 rounded-xl flex items-center justify-center text-primary-600 mb-5 group-hover:bg-primary-600 group-hover:text-white transition">
-                                <Target className="w-8 h-8" />
-                            </div>
-                            <h3 className="text-xl font-bold text-gray-900 mb-3">
-                                Personalized Roadmap
-                            </h3>
-                            <p className="text-gray-600 leading-relaxed">
-                                AI-generated career roadmap based on your goals
-                                and alumni success patterns
-                            </p>
-                        </div>
-
-                        <div className="bg-white p-8 rounded-2xl border border-gray-200 hover:border-primary-300 hover:shadow-xl transition group">
-                            <div className="w-16 h-16 bg-primary-100 rounded-xl flex items-center justify-center text-primary-600 mb-5 group-hover:bg-primary-600 group-hover:text-white transition">
-                                <Users className="w-8 h-8" />
-                            </div>
-                            <h3 className="text-xl font-bold text-gray-900 mb-3">
-                                Smart Organization Match
-                            </h3>
-                            <p className="text-gray-600 leading-relaxed">
-                                Find the best university organizations based on
-                                your career aspirations
-                            </p>
-                        </div>
-
-                        <div className="bg-white p-8 rounded-2xl border border-gray-200 hover:border-primary-300 hover:shadow-xl transition group">
-                            <div className="w-16 h-16 bg-primary-100 rounded-xl flex items-center justify-center text-primary-600 mb-5 group-hover:bg-primary-600 group-hover:text-white transition">
-                                <Award className="w-8 h-8" />
-                            </div>
-                            <h3 className="text-xl font-bold text-gray-900 mb-3">
-                                Certificate Recommendations
-                            </h3>
-                            <p className="text-gray-600 leading-relaxed">
-                                Get curated certificate suggestions that matter
-                                for your target career
-                            </p>
-                        </div>
-
-                        <div className="bg-white p-8 rounded-2xl border border-gray-200 hover:border-primary-300 hover:shadow-xl transition group">
-                            <div className="w-16 h-16 bg-primary-100 rounded-xl flex items-center justify-center text-primary-600 mb-5 group-hover:bg-primary-600 group-hover:text-white transition">
-                                <BookOpen className="w-8 h-8" />
-                            </div>
-                            <h3 className="text-xl font-bold text-gray-900 mb-3">
-                                Course Navigator
-                            </h3>
-                            <p className="text-gray-600 leading-relaxed">
-                                Discover which elective courses will boost your
-                                career prospects
-                            </p>
-                        </div>
-
-                        <div className="bg-white p-8 rounded-2xl border border-gray-200 hover:border-primary-300 hover:shadow-xl transition group">
-                            <div className="w-16 h-16 bg-primary-100 rounded-xl flex items-center justify-center text-primary-600 mb-5 group-hover:bg-primary-600 group-hover:text-white transition">
-                                <Brain className="w-8 h-8" />
-                            </div>
-                            <h3 className="text-xl font-bold text-gray-900 mb-3">
-                                Skill Gap Analysis
-                            </h3>
-                            <p className="text-gray-600 leading-relaxed">
-                                Identify missing skills and get actionable steps
-                                to fill the gaps
-                            </p>
-                        </div>
-
-                        <div className="bg-white p-8 rounded-2xl border border-gray-200 hover:border-primary-300 hover:shadow-xl transition group">
-                            <div className="w-16 h-16 bg-primary-100 rounded-xl flex items-center justify-center text-primary-600 mb-5 group-hover:bg-primary-600 group-hover:text-white transition">
-                                <Briefcase className="w-8 h-8" />
-                            </div>
-                            <h3 className="text-xl font-bold text-gray-900 mb-3">
-                                Alumni Insights
-                            </h3>
-                            <p className="text-gray-600 leading-relaxed">
-                                Learn from successful alumni who achieved your
-                                dream career
-                            </p>
-                        </div>
+                        <FeatureCard
+                            icon={<Target className="w-8 h-8" />}
+                            title="Personalized Trajectory"
+                            description="AI-calculated flight path based on your unique goals and alumni data."
+                        />
+                        <FeatureCard
+                            icon={<Users className="w-8 h-8" />}
+                            title="Crew Assembly"
+                            description="Find the perfect organizations and communities to join your mission."
+                        />
+                        <FeatureCard
+                            icon={<Award className="w-8 h-8" />}
+                            title="Achievement Unlocked"
+                            description="Identify key certificates that act as boosters for your career rocket."
+                        />
+                        <FeatureCard
+                            icon={<BookOpen className="w-8 h-8" />}
+                            title="Knowledge Navigation"
+                            description="Chart your course through elective subjects that matter most."
+                        />
+                        <FeatureCard
+                            icon={<Brain className="w-8 h-8" />}
+                            title="Skill Analysis"
+                            description="Detect void spaces in your skill set and fill them before launch."
+                        />
+                        <FeatureCard
+                            icon={<Briefcase className="w-8 h-8" />}
+                            title="Alumni Constellations"
+                            description="Learn from the star maps of successful alumni who went before you."
+                        />
                     </div>
                 </div>
             </section>
 
+            {/* CTA Section */}
             <section className="py-24 px-4">
                 <div className="max-w-4xl mx-auto text-center">
-                    <div className="bg-gradient-to-br from-primary-600 to-secondary-600 rounded-3xl p-12 text-white shadow-2xl">
-                        <h2 className="text-4xl md:text-5xl font-bold mb-6">
-                            Ready to Build Your Future?
-                        </h2>
-                        <p className="text-xl mb-8 opacity-90">
-                            Join thousands of students who are already on their
-                            path to success
-                        </p>
-                        <Link
-                            to="/register"
-                            className="inline-flex items-center gap-2 bg-white text-primary-600 px-8 py-4 rounded-xl hover:bg-gray-50 transition text-lg font-semibold shadow-lg"
-                        >
-                            Create Your Roadmap Now
-                            <TrendingUp className="w-5 h-5" />
-                        </Link>
+                    <div className="bg-gradient-to-br from-primary-900/50 to-secondary-900/50 rounded-3xl p-12 text-white shadow-2xl border border-white/10 backdrop-blur-md relative overflow-hidden">
+                        <div className="absolute inset-0 bg-grid-white/[0.05] bg-[length:20px_20px]"></div>
+                        <div className="relative z-10">
+                            <h2 className="text-4xl md:text-5xl font-bold mb-6">
+                                Ready for Liftoff?
+                            </h2>
+                            <p className="text-xl mb-8 text-gray-300">
+                                Join thousands of students launching their dream
+                                careers today.
+                            </p>
+                            <Link
+                                to="/register"
+                                className="inline-flex items-center gap-2 bg-white text-primary-900 px-8 py-4 rounded-xl hover:bg-gray-100 transition text-lg font-bold shadow-[0_0_20px_rgba(255,255,255,0.3)]"
+                            >
+                                Begin Countdown
+                                <TrendingUp className="w-5 h-5" />
+                            </Link>
+                        </div>
                     </div>
                 </div>
             </section>
 
-            <footer className="bg-gray-900 text-white py-12 px-4">
+            {/* Footer */}
+            <footer className="bg-black/50 text-white py-12 px-4 border-t border-white/10">
                 <div className="max-w-7xl mx-auto text-center">
                     <div className="flex items-center justify-center gap-2 mb-4">
                         <Rocket className="w-8 h-8 text-primary-400" />
                         <span className="text-2xl font-bold">PU Catalyst</span>
                     </div>
-                    <p className="text-gray-400 mb-6">
-                        Empowering students with AI-driven career guidance
+                    <p className="text-gray-500 mb-6">
+                        Empowering students to reach the stars with AI-driven
+                        guidance
                     </p>
-                    <p className="text-gray-500 text-sm">
+                    <p className="text-gray-600 text-sm">
                         © 2025 PU Catalyst. All rights reserved.
                     </p>
                 </div>
             </footer>
+        </div>
+    );
+}
+
+function FeatureCard({ icon, title, description }) {
+    return (
+        <div className="bg-white/5 p-8 rounded-2xl border border-white/10 hover:border-primary-500/50 hover:bg-white/10 hover:shadow-[0_0_30px_rgba(59,130,246,0.15)] transition group backdrop-blur-sm">
+            <div className="w-16 h-16 bg-primary-500/20 rounded-xl flex items-center justify-center text-primary-400 mb-5 group-hover:bg-primary-500 group-hover:text-white transition shadow-[0_0_15px_rgba(59,130,246,0.2)]">
+                {icon}
+            </div>
+            <h3 className="text-xl font-bold text-white mb-3">{title}</h3>
+            <p className="text-gray-400 leading-relaxed">{description}</p>
         </div>
     );
 }

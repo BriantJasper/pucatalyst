@@ -3,7 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 
 // Pages
-import LandingPage from "./pages/LandingPageNew";
+import LandingPage from "./pages/LandingPage3D";
 import LoginPage from "./pages/auth/LoginPage";
 import RegisterPage from "./pages/auth/RegisterPage";
 import OAuthCallback from "./pages/auth/OAuthCallback";
