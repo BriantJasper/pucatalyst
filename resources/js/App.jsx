@@ -6,7 +6,6 @@ import { useAuthStore } from "./store/authStore";
 import LandingPage from "./pages/LandingPageNew";
 import LoginPage from "./pages/auth/LoginPage";
 import RegisterPage from "./pages/auth/RegisterPage";
-import OAuthCallback from "./pages/auth/OAuthCallback";
 
 // Student Pages
 import StudentDashboard from "./pages/student/StudentDashboard";
@@ -53,7 +52,6 @@ function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
-            <Route path="/auth/callback" element={<OAuthCallback />} />
 
             {/* Student Routes */}
             <Route

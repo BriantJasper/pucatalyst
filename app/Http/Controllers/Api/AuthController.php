@@ -62,14 +62,14 @@ class AuthController extends Controller
             if ($request->has('face_images') && is_array($request->face_images) && count($request->face_images) >= 5) {
                 try {
                     $faceServiceUrl = env('FACE_RECOGNITION_SERVICE_URL', 'http://localhost:5000');
-                    
+
                     $response = Http::timeout(30)->post($faceServiceUrl . '/encode-faces', [
                         'images' => $request->face_images
                     ]);
 
                     if ($response->successful() && $response->json('success')) {
                         $encoding = $response->json('encoding');
-                        
+
                         $user->update([
                             'face_encoding' => json_encode($encoding),
                             'face_auth_enabled' => true,
@@ -112,7 +112,7 @@ class AuthController extends Controller
         }
 
         try {
-            $login = $request->login;
+            $login = trim($request->login);
             $credentials = [];
 
             // Check if login is email or student_id
@@ -122,29 +122,28 @@ class AuthController extends Controller
                     'email' => $login,
                     'password' => $request->password,
                 ];
-                
+
                 if (!$token = JWTAuth::attempt($credentials)) {
                     return response()->json(['error' => 'Invalid credentials'], 401);
                 }
+                $user = auth()->user();
             } else {
                 // Login with student_id - find user by student_id
                 $student = Student::where('student_id', $login)->first();
-                
+
                 if (!$student) {
                     return response()->json(['error' => 'Invalid credentials'], 401);
                 }
-                
+
                 $user = $student->user;
-                
+
                 if (!Hash::check($request->password, $user->password)) {
                     return response()->json(['error' => 'Invalid credentials'], 401);
                 }
-                
+
                 $token = JWTAuth::fromUser($user);
             }
 
-            $user = auth()->user();
-            
             // Check if face authentication is enabled for this user
             if ($user->face_auth_enabled) {
                 // Return temporary token that requires face verification
@@ -159,7 +158,7 @@ class AuthController extends Controller
                     ],
                 ]);
             }
-            
+
             return response()->json([
                 'message' => 'Login successful',
                 'access_token' => $token,
@@ -197,7 +196,7 @@ class AuthController extends Controller
 
             // Call face recognition service
             $faceServiceUrl = env('FACE_RECOGNITION_SERVICE_URL', 'http://localhost:5000');
-            
+
             $response = Http::timeout(30)->post($faceServiceUrl . '/verify-face', [
                 'image' => $request->face_image,
                 'stored_encoding' => json_decode($user->face_encoding, true)
@@ -239,7 +238,6 @@ class AuthController extends Controller
                 'user' => $user,
                 'confidence' => $result['confidence'] ?? 0,
             ]);
-
         } catch (JWTException $e) {
             return response()->json(['error' => 'Token error: ' . $e->getMessage()], 401);
         } catch (\Exception $e) {
@@ -333,68 +331,7 @@ class AuthController extends Controller
         ]);
     }
 
-    public function redirectToGoogle()
-    {
-        try {
-            $url = \Laravel\Socialite\Facades\Socialite::driver('google')
-                ->stateless()
-                ->redirect()
-                ->getTargetUrl();
 
-            return response()->json(['url' => $url]);
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
-    }
-
-    public function handleGoogleCallback(Request $request)
-    {
-        try {
-            $googleUser = \Laravel\Socialite\Facades\Socialite::driver('google')
-                ->stateless()
-                ->user();
-
-            // Find or create user
-            $user = User::where('email', $googleUser->getEmail())->first();
-
-            if (!$user) {
-                // Create new user from Google data
-                $user = User::create([
-                    'name' => $googleUser->getName(),
-                    'email' => $googleUser->getEmail(),
-                    'password' => Hash::make(\Illuminate\Support\Str::random(32)), // Random password for OAuth users
-                    'role' => 'student', // Default role, can be changed
-                    'email_verified' => true, // Google emails are verified
-                ]);
-
-                // Create student profile
-                Student::create([
-                    'user_id' => $user->id,
-                    'major' => 'Undeclared',
-                    'career_goal' => 'Not specified',
-                ]);
-            }
-
-            // Generate JWT token
-            $token = JWTAuth::fromUser($user);
-
-            // Redirect to frontend callback with token and user data
-            $frontendUrl = env('VITE_APP_URL', 'http://localhost:3000');
-            $callbackUrl = $frontendUrl . '/auth/callback?' . http_build_query([
-                'token' => $token,
-                'user' => json_encode($user),
-            ]);
-
-            return redirect($callbackUrl);
-        } catch (\Exception $e) {
-            // Redirect to frontend with error
-            $frontendUrl = env('VITE_APP_URL', 'http://localhost:3000');
-            $errorUrl = $frontendUrl . '/auth/callback?' . http_build_query([
-                'error' => $e->getMessage(),
-            ]);
-            return redirect($errorUrl);
-        }
-    }
 
     public function setupFaceAuth(Request $request)
     {
@@ -412,7 +349,7 @@ class AuthController extends Controller
 
             // Call face recognition service to encode faces
             $faceServiceUrl = env('FACE_RECOGNITION_SERVICE_URL', 'http://localhost:5000');
-            
+
             $response = Http::timeout(60)->post($faceServiceUrl . '/encode-faces', [
                 'images' => $request->face_images
             ]);
@@ -447,7 +384,6 @@ class AuthController extends Controller
                 'message' => 'Face authentication enabled successfully',
                 'images_processed' => $result['images_processed'] ?? count($request->face_images),
             ]);
-
         } catch (\Exception $e) {
             Log::error('Setup face auth error: ' . $e->getMessage());
             return response()->json([
@@ -470,7 +406,6 @@ class AuthController extends Controller
                 'success' => true,
                 'message' => 'Face authentication disabled successfully'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Disable face auth error: ' . $e->getMessage());
             return response()->json([
@@ -511,7 +446,6 @@ class AuthController extends Controller
                 'success' => true,
                 'message' => 'Password changed successfully'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Change password error: ' . $e->getMessage());
             return response()->json([
@@ -559,7 +493,6 @@ class AuthController extends Controller
                 'success' => true,
                 'message' => 'Account deleted successfully'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Delete account error: ' . $e->getMessage());
             return response()->json([

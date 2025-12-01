@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import axios from "../../lib/axios";
 import RoadmapView from "../../components/RoadmapView";
+import Navbar from "../../components/layouts/Navbar";
 
 export default function RoadmapPage() {
     const [roadmap, setRoadmap] = useState(null);
@@ -24,15 +25,10 @@ export default function RoadmapPage() {
     };
 
     return (
+        <>
+            <Navbar />
         <div className="min-h-screen bg-gray-50 p-8">
             <div className="max-w-4xl mx-auto">
-                <Link
-                    to="/student/dashboard"
-                    className="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-700 mb-6"
-                >
-                    <ArrowLeft className="w-5 h-5" />
-                    Back to Dashboard
-                </Link>
 
                 <div className="mb-8">
                     <h1 className="text-3xl font-bold text-gray-900">
@@ -46,5 +42,6 @@ export default function RoadmapPage() {
                 <RoadmapView roadmap={roadmap} />
             </div>
         </div>
+        </>
     );
 }

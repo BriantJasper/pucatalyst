@@ -79,13 +79,6 @@ export default function OrganizationExplorer() {
             <Navbar />
             <div className="min-h-screen bg-gray-50 p-8">
                 <div className="max-w-7xl mx-auto">
-                    <Link
-                        to="/student/dashboard"
-                        className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-700 mb-8 transition-colors"
-                    >
-                        <ArrowLeft className="w-5 h-5" />
-                        Back to Dashboard
-                    </Link>
 
                     <div className="mb-12">
                         <h1 className="text-4xl font-bold text-gray-900 mb-4">

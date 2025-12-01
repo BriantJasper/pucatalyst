@@ -21,9 +21,9 @@ import {
     Trash2,
     AlertTriangle,
 } from "lucide-react";
-import Navbar from "../components/layouts/Navbar";
 import FaceAuthSettings from "../components/FaceAuthSettings";
 import { useAuthStore } from "../store/authStore";
+import Navbar from "../components/layouts/Navbar";
 
 const ProfilePage = () => {
     const { user: authUser, setAuth } = useAuthStore();
@@ -361,7 +361,7 @@ const ProfilePage = () => {
     return (
         <div className="min-h-screen bg-gray-50">
             <Navbar />
-            <div className="py-12 px-4 sm:px-6 lg:px-8">
+            <div className="py-8 px-4 sm:px-6 lg:px-8">
                 <div className="max-w-4xl mx-auto">
                     {/* Header */}
                     <div className="mb-8">
