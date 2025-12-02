@@ -14,13 +14,20 @@ CORS(app)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Load SBERT model
-MODEL_NAME = 'paraphrase-multilingual-MiniLM-L12-v2'
-logger.info(f"Loading SBERT model: {MODEL_NAME}")
-model = SentenceTransformer(MODEL_NAME)
-
-# Load alumni data
+# Load SBERT model from local path (pre-trained)
 BASE_DIR = os.path.join(os.path.dirname(__file__), '..', 'AI-SBERT-PUCATALYST')
+LOCAL_MODEL_PATH = os.path.join(BASE_DIR, 'sbert_model')
+
+# Try to load local model first, fallback to downloading
+if os.path.exists(LOCAL_MODEL_PATH):
+    logger.info(f"Loading local SBERT model from: {LOCAL_MODEL_PATH}")
+    model = SentenceTransformer(LOCAL_MODEL_PATH)
+else:
+    MODEL_NAME = 'paraphrase-multilingual-MiniLM-L12-v2'
+    logger.info(f"Local model not found, downloading: {MODEL_NAME}")
+    model = SentenceTransformer(MODEL_NAME)
+
+# Load alumni data  
 EMBEDDINGS_PATH = os.path.join(BASE_DIR, 'alumni_embeddings.npy')
 DATA_PATH = os.path.join(BASE_DIR, 'alumni_data.pkl')
 
