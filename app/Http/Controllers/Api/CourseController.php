@@ -3,16 +3,21 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Course;
 use Illuminate\Http\Request;
 
 class CourseController extends Controller
 {
     /**
-     * Display a listing of the resource.
+     * Display a listing of all active courses.
      */
     public function index()
     {
-        //
+        $courses = Course::where('is_active', true)
+            ->orderBy('course_name')
+            ->get();
+
+        return response()->json($courses);
     }
 
     /**
@@ -24,11 +29,12 @@ class CourseController extends Controller
     }
 
     /**
-     * Display the specified resource.
+     * Display the specified course.
      */
     public function show(string $id)
     {
-        //
+        $course = Course::findOrFail($id);
+        return response()->json($course);
     }
 
     /**

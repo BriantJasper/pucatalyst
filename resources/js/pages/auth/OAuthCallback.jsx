@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
-import toast from "react-hot-toast";
+import { useToast } from "../../hooks/use-toast";
 import { useAuthStore } from "../../store/authStore";
 
 export default function OAuthCallback() {
     const navigate = useNavigate();
+    const { toast } = useToast();
     const [searchParams] = useSearchParams();
     const setAuth = useAuthStore((state) => state.setAuth);
     const [error, setError] = useState("");
@@ -17,7 +18,11 @@ export default function OAuthCallback() {
                 const errorParam = searchParams.get("error");
                 if (errorParam) {
                     setError(errorParam);
-                    toast.error(errorParam);
+                    toast({
+                        variant: "destructive",
+                        title: "Authentication Error",
+                        description: errorParam,
+                    });
                     setTimeout(() => navigate("/login"), 2000);
                     return;
                 }
@@ -36,7 +41,10 @@ export default function OAuthCallback() {
                 localStorage.setItem("access_token", token);
                 setAuth(user, token);
 
-                toast.success(`Welcome, ${user.name}!`);
+                toast({
+                    title: "Welcome!",
+                    description: `Welcome, ${user.name}!`,
+                });
 
                 // Redirect based on role
                 if (user.role === "student") {
@@ -51,7 +59,11 @@ export default function OAuthCallback() {
             } catch (err) {
                 const message = err.message || "OAuth authentication failed";
                 setError(message);
-                toast.error(message);
+                toast({
+                    variant: "destructive",
+                    title: "Authentication Failed",
+                    description: message,
+                });
 
                 // Redirect to login after 2 seconds
                 setTimeout(() => navigate("/login"), 2000);

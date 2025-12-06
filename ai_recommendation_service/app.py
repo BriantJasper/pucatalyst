@@ -1,286 +1,312 @@
+import os
+import sys
+import pandas as pd
+import numpy as np
+import re
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import numpy as np
-import pickle
 from sentence_transformers import SentenceTransformer
-import os
-from typing import List, Dict, Tuple
-import logging
+from sklearn.metrics.pairwise import cosine_similarity
+from collections import Counter
+from sklearn.feature_extraction.text import CountVectorizer
+from pypdf import PdfReader
 
+# Initialize Flask App
 app = Flask(__name__)
 CORS(app)
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# --- Configuration ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(BASE_DIR)
+AI_DATA_DIR = os.path.join(PROJECT_ROOT, 'AI-SBERT-PUCATALYST')
+MODEL_PATH = os.path.join(AI_DATA_DIR, 'sbert_model')
+DATA_PATH = os.path.join(AI_DATA_DIR, 'alumni_data.pkl')
 
-# Load SBERT model from local path (pre-trained)
-BASE_DIR = os.path.join(os.path.dirname(__file__), '..', 'AI-SBERT-PUCATALYST')
-LOCAL_MODEL_PATH = os.path.join(BASE_DIR, 'sbert_model')
+# Global variables to store model and data
+sbert_model = None
+df = None
+sbert_embeddings_full = None
 
-# Try to load local model first, fallback to downloading
-if os.path.exists(LOCAL_MODEL_PATH):
-    logger.info(f"Loading local SBERT model from: {LOCAL_MODEL_PATH}")
-    model = SentenceTransformer(LOCAL_MODEL_PATH)
-else:
-    MODEL_NAME = 'paraphrase-multilingual-MiniLM-L12-v2'
-    logger.info(f"Local model not found, downloading: {MODEL_NAME}")
-    model = SentenceTransformer(MODEL_NAME)
+def standardize_text(text):
+    if pd.isna(text) or text is None:
+        return ""
+    text = str(text).lower()
+    text = re.sub(r'[;,|]', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
 
-# Load alumni data  
-EMBEDDINGS_PATH = os.path.join(BASE_DIR, 'alumni_embeddings.npy')
-DATA_PATH = os.path.join(BASE_DIR, 'alumni_data.pkl')
-
-alumni_embeddings = None
-alumni_data = None
-
-def load_data():
-    """Load alumni embeddings and data"""
-    global alumni_embeddings, alumni_data
-    
+def extract_text_from_pdf(pdf_path):
     try:
-        logger.info("Loading alumni embeddings...")
-        alumni_embeddings = np.load(EMBEDDINGS_PATH)
-        logger.info(f"Loaded {len(alumni_embeddings)} alumni embeddings")
-        
-        logger.info("Loading alumni data...")
-        with open(DATA_PATH, 'rb') as f:
-            alumni_data = pickle.load(f)
-        logger.info(f"Loaded {len(alumni_data)} alumni records")
-        
-        return True
+        reader = PdfReader(pdf_path)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text() + " "
+        return text.strip()
     except Exception as e:
-        logger.error(f"Error loading data: {e}")
-        return False
+        print(f"Error reading PDF {pdf_path}: {e}")
+        return ""
 
-def calculate_similarity(query_embedding: np.ndarray, alumni_embeddings: np.ndarray) -> np.ndarray:
-    """Calculate cosine similarity between query and all alumni embeddings"""
-    # Normalize embeddings
-    query_norm = query_embedding / np.linalg.norm(query_embedding)
-    alumni_norm = alumni_embeddings / np.linalg.norm(alumni_embeddings, axis=1, keepdims=True)
+def load_resources():
+    global sbert_model, df, sbert_embeddings_full
     
-    # Calculate cosine similarity
-    similarities = np.dot(alumni_norm, query_norm)
-    return similarities
+    print("Loading resources...")
+    
+    # 1. Load Data
+    if not os.path.exists(DATA_PATH):
+        raise FileNotFoundError(f"Data file not found at: {DATA_PATH}")
+    
+    print(f"Loading data from {DATA_PATH}...")
+    if DATA_PATH.endswith('.pkl'):
+        data = pd.read_pickle(DATA_PATH)
+        # Handle if it's a list of dicts
+        if isinstance(data, list):
+            df = pd.DataFrame(data)
+        else:
+            df = data
+    else:
+        df = pd.read_csv(DATA_PATH)
+    print(f"Data loaded. Shape: {df.shape}")
+    
+    # 2. Load Model
+    print(f"Loading SBERT model from {MODEL_PATH}...")
+    try:
+        sbert_model = SentenceTransformer(MODEL_PATH)
+        print("Model loaded successfully.")
+    except Exception as e:
+        print(f"Failed to load local model, trying to load from HuggingFace as fallback (might require internet): {e}")
+        sbert_model = SentenceTransformer('distiluse-base-multilingual-cased-v1')
 
-def get_top_alumni(query: str, top_n: int = 5) -> List[Dict]:
-    """Get top N most similar alumni based on query"""
-    if alumni_embeddings is None or alumni_data is None:
-        raise ValueError("Alumni data not loaded")
+    # 3. Generate/Load Embeddings
+    # In a production env, we should save these to a .npy file to save time.
+    # For now, we'll generate them on startup or load if available.
+    embeddings_path = os.path.join(AI_DATA_DIR, 'alumni_embeddings.npy')
     
-    # Generate query embedding
-    query_embedding = model.encode(query)
-    
-    # Calculate similarities
-    similarities = calculate_similarity(query_embedding, alumni_embeddings)
-    
-    # Get top N indices
-    top_indices = np.argsort(similarities)[::-1][:top_n]
-    
-    # Prepare results
-    results = []
-    for idx in top_indices:
-        alumni = alumni_data[idx].copy()
-        alumni['similarity_score'] = float(similarities[idx])
-        alumni['similarity_percentage'] = float(similarities[idx] * 100)
-        results.append(alumni)
-    
-    return results
+    if os.path.exists(embeddings_path):
+        print(f"Loading embeddings from {embeddings_path}...")
+        sbert_embeddings_full = np.load(embeddings_path)
+    else:
+        print("Generating embeddings (this might take a while)...")
+        # Ensure 'combined_features' exists or create it
+        if 'combined_features' not in df.columns:
+             # Create combined features similar to notebook if missing
+            # Based on notebook: 'major', 'job_title', 'skills', 'projects', 'certifications', 'organizations'
+             df['combined_features'] = df.apply(lambda row: ' '.join([
+                str(row['major']),
+                str(row['job_title']),
+                str(row['skills']),
+                str(row['projects']),
+                str(row['certifications']),
+                str(row['organizations'])
+            ]), axis=1)
+        
+        sbert_embeddings_full = sbert_model.encode(df['combined_features'].tolist(), show_progress_bar=True)
+        # Save for next time
+        np.save(embeddings_path, sbert_embeddings_full)
+        
+    print(f"Embeddings ready. Shape: {sbert_embeddings_full.shape}")
 
-def extract_skills_from_alumni(alumni_list: List[Dict]) -> Dict:
-    """Extract and count skills from top alumni with improved filtering"""
-    skills = {}
-    certifications = {}
-    organizations = {}
-    projects = {}
-    
-    # Soft skills to separate (for better categorization)
-    soft_skills = {'time management', 'leadership', 'communication', 'problem solving', 
-                   'teamwork', 'critical thinking', 'creativity', 'adaptability'}
-    
-    technical_skills = {}
-    soft_skill_counts = {}
-    
-    for alumni in alumni_list:
-        # Count skills (separate technical vs soft)
-        for skill in alumni.get('skills', []):
-            skill_lower = skill.lower()
-            if skill_lower in soft_skills:
-                soft_skill_counts[skill] = soft_skill_counts.get(skill, 0) + 1
-            else:
-                technical_skills[skill] = technical_skills.get(skill, 0) + 1
-        
-        # Count certifications
-        for cert in alumni.get('certifications', []):
-            certifications[cert] = certifications.get(cert, 0) + 1
-        
-        # Count organizations
-        for org in alumni.get('organizations', []):
-            organizations[org] = organizations.get(org, 0) + 1
-        
-        # Count project types
-        for project in alumni.get('projects', []):
-            projects[project] = projects.get(project, 0) + 1
-    
-    # Merge technical and soft skills, prioritizing technical first
-    sorted_technical = sorted(technical_skills.items(), key=lambda x: x[1], reverse=True)
-    sorted_soft = sorted(soft_skill_counts.items(), key=lambda x: x[1], reverse=True)
-    
-    # Combine: show top technical skills, then some soft skills
-    combined_skills = sorted_technical[:12] + sorted_soft[:3]
-    
-    # Filter out items that appear in less than 2 alumni (noise reduction)
-    min_frequency = max(2, len(alumni_list) // 3)  # At least 2 or 1/3 of alumni
-    
-    sorted_certs = [(cert, count) for cert, count in 
-                    sorted(certifications.items(), key=lambda x: x[1], reverse=True) 
-                    if count >= min(2, len(alumni_list) // 2)]
-    
-    sorted_orgs = [(org, count) for org, count in 
-                   sorted(organizations.items(), key=lambda x: x[1], reverse=True)
-                   if count >= min(2, len(alumni_list) // 2)]
-    
-    sorted_projects = [(proj, count) for proj, count in 
-                       sorted(projects.items(), key=lambda x: x[1], reverse=True)
-                       if count >= min(2, len(alumni_list) // 2)]
-    
-    return {
-        'skills': combined_skills,
-        'certifications': sorted_certs,
-        'organizations': sorted_orgs,
-        'projects': sorted_projects
-    }
+def recommend_profile_and_actions_sbert(target_text, context_text="", top_n_alumni_display=5, top_n_actions=5, top_n_alumni_for_actions=15):
+    # 1. Profile Matching
+    standardized_target_text = standardize_text(target_text + " " + context_text)
+    target_vector = sbert_model.encode([standardized_target_text], convert_to_tensor=False)
 
-def get_autocomplete_suggestions(partial_query: str, max_suggestions: int = 5) -> List[str]:
-    """Get autocomplete suggestions based on partial query"""
-    if not partial_query or len(partial_query) < 2:
-        return []
+    target_sim_scores = cosine_similarity(target_vector, sbert_embeddings_full).flatten()
+
+    sim_scores = list(enumerate(target_sim_scores))
+    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
+
+    # Top Alumni for Display
+    top_alumni_indices_display = [i[0] for i in sim_scores[1:top_n_alumni_display + 1]] # Exclude self (though 'self' isn't in DB, just following logic)
+    top_alumni_scores_display = [i[1] for i in sim_scores[1:top_n_alumni_display + 1]]
+
+    recommended_alumni_df = df.iloc[top_alumni_indices_display].copy()
+    recommended_alumni_df['Similarity Score'] = top_alumni_scores_display
+
+    # 2. Action Analysis
+    top_alumni_indices_for_actions = [i[0] for i in sim_scores[1:top_n_alumni_for_actions + 1]]
+    target_alumni_data = df.iloc[top_alumni_indices_for_actions]
+
+    # Extract Data
+    # Note: Data in pickle seems to be lists already, not strings like "A, B". 
+    # Let's handle both cases (list or string)
     
-    partial_lower = partial_query.lower()
-    suggestions = set()
+    def explode_items(series):
+        # If it's already a list, just explode. If string, split then explode.
+        if series.empty: return series
+        first_item = series.iloc[0]
+        if isinstance(first_item, list):
+            return series.explode().astype(str).str.strip()
+        return series.astype(str).str.split(r'[,|]').explode().str.strip()
+
+    org_list_full_entities = explode_items(target_alumni_data['organizations'])
+    skills_list = explode_items(target_alumni_data['skills'])
+    certs_list = explode_items(target_alumni_data['certifications'])
+
+    # Organizations
+    org_list_filtered = org_list_full_entities[~org_list_full_entities.isin(['nan', '', ' '])]
+    org_counts = Counter(org_list_filtered[org_list_filtered.str.len() > 1].str.strip())
+    org_counts_df = pd.DataFrame(org_counts.items(), columns=['Organisasi', 'count'])
+
+    generic_single_words = ['puma', 'management', 'accounting', 'informatics', 'science', 'engineering']
+    def filter_generic_single_words(org_name):
+        if ' ' not in org_name and org_name in generic_single_words:
+            if org_name in ['aiesec', 'debate', 'accounting']: return True
+            return False
+        return True
     
-    # Extract common terms from alumni data
-    for alumni in alumni_data:
-        # Check job titles
-        job_title = alumni.get('job_title', '').lower()
-        if partial_lower in job_title:
-            suggestions.add(alumni.get('job_title', ''))
-        
-        # Check major
-        major = alumni.get('major', '').lower()
-        if partial_lower in major:
-            suggestions.add(alumni.get('major', ''))
-        
-        # Check skills
-        for skill in alumni.get('skills', []):
-            if partial_lower in skill.lower():
-                suggestions.add(skill)
+    if not org_counts_df.empty:
+        top_orgs = org_counts_df[org_counts_df['Organisasi'].apply(filter_generic_single_words)]
+        top_orgs = top_orgs.sort_values('count', ascending=False).head(top_n_actions)
+    else:
+        top_orgs = pd.DataFrame(columns=['Organisasi', 'count'])
+
+    # Skills
+    skills_counts = Counter(skills_list[skills_list.str.len() > 0].str.strip())
+    top_skills = pd.DataFrame(skills_counts.most_common(top_n_actions), columns=['Skill', 'count'])
+
+    # Certificates
+    certs_counts = Counter(certs_list[certs_list.str.len() > 0].str.strip())
+    top_certs = pd.DataFrame(certs_counts.most_common(top_n_actions), columns=['Sertifikat', 'count'])
+
+    # Projects
+    # Projects might be a list of strings too
+    proj_series = target_alumni_data['projects']
+    if not proj_series.empty and isinstance(proj_series.iloc[0], list):
+        proj_list = proj_series.explode().astype(str).fillna('')
+        # Join back to text for vectorizer? Or just count phrases?
+        # Vectorizer expects a list of documents.
+        # Let's treat each project title as a document.
+        proj_docs = proj_list.tolist()
+    else:
+        proj_docs = target_alumni_data['projects'].astype(str).fillna('').tolist()
+
+    action_stop_words = [
+        'a', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'by', 'for', 'if', 'in', 'into', 'is', 'it', 'no', 'not', 'of', 'on', 'or', 'such',
+        'that', 'the', 'their', 'then', 'there', 'these', 'they', 'this', 'to', 'was', 'will', 'with', '','from','up','down','out','over','under'
+    ]
     
-    return sorted(list(suggestions))[:max_suggestions]
+    if proj_docs:
+        try:
+            proj_vectorizer = CountVectorizer(ngram_range=(1, 3), stop_words=list(action_stop_words))
+            proj_matrix = proj_vectorizer.fit_transform(proj_docs)
+            proj_sums = np.sum(proj_matrix, axis=0)
+            proj_counts = pd.DataFrame({'phrase': proj_vectorizer.get_feature_names_out(), 'count': proj_sums.flat}).sort_values('count', ascending=False)
+
+            proj_counts['is_ngram'] = proj_counts['phrase'].apply(lambda x: len(x.split()) > 1)
+            top_projs = proj_counts.sort_values(['is_ngram', 'count'], ascending=[False, False]).head(top_n_actions).rename(columns={'phrase': 'Project Keywords'})
+        except ValueError:
+             top_projs = pd.DataFrame(columns=['Project Keywords', 'count'])
+    else:
+        top_projs = pd.DataFrame(columns=['Project Keywords', 'count'])
+
+    return recommended_alumni_df, top_orgs, top_skills, top_certs, top_projs
 
 @app.route('/health', methods=['GET'])
 def health():
-    """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'model': MODEL_NAME,
-        'alumni_count': len(alumni_data) if alumni_data else 0
-    })
+    return jsonify({'status': 'healthy', 'service': 'ai_recommendation_sbert'}), 200
 
 @app.route('/recommend', methods=['POST'])
 def recommend():
-    """Get alumni recommendations based on career goal"""
     try:
-        data = request.json
-        query = data.get('query', '').strip()
+        data = request.get_json(silent=True) or {}
+        # Accept both 'goal' and 'query' for flexibility
+        goal = data.get('goal') or data.get('query')
+        context = data.get('context', '')
+        resume_path = data.get('resume_path')
         top_n = data.get('top_n', 5)
         
-        if not query:
-            return jsonify({'error': 'Query is required'}), 400
+        if not goal:
+            return jsonify({'error': 'Goal or query is required'}), 400
+            
+        if len(goal) < 3:
+             return jsonify({'error': 'Goal is too short'}), 400
+
+        # Extract text from PDF if provided (Windows-safe)
+        if isinstance(resume_path, str) and resume_path.strip():
+            # Normalize Windows path and ensure it's a local .pdf file
+            normalized_path = os.path.normpath(resume_path)
+            if normalized_path.lower().endswith('.pdf') and os.path.isfile(normalized_path):
+                try:
+                    print(f"Extracting text from resume: {normalized_path}")
+                    resume_text = extract_text_from_pdf(normalized_path)
+                    if resume_text:
+                        context += " Resume Content: " + resume_text
+                except Exception as pdf_err:
+                    # Log and continue without blocking recommendations
+                    print(f"Resume extraction skipped due to error: {pdf_err}")
+            else:
+                # Ignore non-existent, non-pdf, or URL-like paths to avoid Errno 22
+                pass
+
+        alumni_df, org_actions, skills_actions, certs_actions, proj_actions = recommend_profile_and_actions_sbert(goal, context)
         
-        if top_n > 20:
-            top_n = 20
+        # Format response - use 'top_alumni' to match frontend expectations
+        # Frontend expects: name, job_title, current_company, major, similarity_percentage
         
-        logger.info(f"Processing recommendation for query: {query}")
+        # Scale similarity score to percentage (0-100)
+        alumni_df['similarity_percentage'] = alumni_df['Similarity Score'] * 100
         
-        # Get top similar alumni
-        top_alumni = get_top_alumni(query, top_n)
+        response = {
+            'top_alumni': alumni_df[['name', 'job_title', 'current_company', 'major', 'similarity_percentage']].to_dict(orient='records'),
+            'recommendations': {
+                'organizations': org_actions.values.tolist(), # Convert to list of [name, count]
+                'skills': skills_actions.values.tolist(),
+                'certifications': certs_actions.values.tolist(),
+                'projects': proj_actions.values.tolist()
+            }
+        }
         
-        # Extract aggregated recommendations
-        recommendations = extract_skills_from_alumni(top_alumni)
-        
-        return jsonify({
-            'query': query,
-            'top_alumni': top_alumni,
-            'recommendations': recommendations,
-            'total_alumni_analyzed': len(top_alumni)
-        })
-        
+        return jsonify(response), 200
+
     except Exception as e:
-        logger.error(f"Error in recommend endpoint: {e}")
+        print(f"Error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/autocomplete', methods=['POST'])
 def autocomplete():
-    """Get autocomplete suggestions"""
     try:
-        data = request.json
-        partial_query = data.get('query', '').strip()
+        data = request.get_json(silent=True) or {}
+        query = data.get('query', '').lower()
         max_suggestions = data.get('max_suggestions', 5)
         
-        if not partial_query:
-            return jsonify({'suggestions': []})
+        if not query:
+            return jsonify({'suggestions': []}), 200
+            
+        # Simple autocomplete based on skills and job titles in the dataframe
+        if df is None:
+             return jsonify({'suggestions': []}), 200
+             
+        # Collect potential suggestions
+        suggestions = set()
         
-        suggestions = get_autocomplete_suggestions(partial_query, max_suggestions)
-        
-        return jsonify({'suggestions': suggestions})
-        
-    except Exception as e:
-        logger.error(f"Error in autocomplete endpoint: {e}")
-        return jsonify({'error': str(e)}), 500
+        # 1. Job Titles (job_title)
+        jobs = df['job_title'].dropna().unique()
+        for job in jobs:
+            if query in str(job).lower():
+                suggestions.add(str(job))
+                
+        # 2. Skills
+        # Skills might be list or string
+        if not df['skills'].empty and isinstance(df['skills'].iloc[0], list):
+             all_skills = df['skills'].explode().dropna().unique()
+        else:
+             all_skills = df['skills'].astype(str).str.split(r'[,|]').explode().dropna().unique()
 
-@app.route('/alumni-stats', methods=['GET'])
-def alumni_stats():
-    """Get statistics about alumni data"""
-    try:
-        if not alumni_data:
-            return jsonify({'error': 'Alumni data not loaded'}), 500
+        for skill in all_skills:
+            if query in str(skill).lower():
+                suggestions.add(str(skill))
+                
+        # Limit and sort
+        sorted_suggestions = sorted(list(suggestions), key=len)[:max_suggestions]
         
-        # Aggregate statistics
-        all_skills = set()
-        all_certs = set()
-        all_orgs = set()
-        majors = {}
-        job_titles = {}
-        
-        for alumni in alumni_data:
-            all_skills.update(alumni.get('skills', []))
-            all_certs.update(alumni.get('certifications', []))
-            all_orgs.update(alumni.get('organizations', []))
-            
-            major = alumni.get('major', 'Unknown')
-            majors[major] = majors.get(major, 0) + 1
-            
-            job_title = alumni.get('job_title', 'Unknown')
-            job_titles[job_title] = job_titles.get(job_title, 0) + 1
-        
-        return jsonify({
-            'total_alumni': len(alumni_data),
-            'unique_skills': len(all_skills),
-            'unique_certifications': len(all_certs),
-            'unique_organizations': len(all_orgs),
-            'majors': dict(sorted(majors.items(), key=lambda x: x[1], reverse=True)[:10]),
-            'top_job_titles': dict(sorted(job_titles.items(), key=lambda x: x[1], reverse=True)[:10])
-        })
+        return jsonify({'suggestions': sorted_suggestions}), 200
         
     except Exception as e:
-        logger.error(f"Error in alumni-stats endpoint: {e}")
+        print(f"Autocomplete Error: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    # Load data on startup
-    if load_data():
-        logger.info("Starting AI Recommendation Service...")
-        app.run(host='0.0.0.0', port=5001, debug=False)
-    else:
-        logger.error("Failed to load alumni data. Service not started.")
+    load_resources()
+    port = int(os.environ.get('PORT', 5001))
+    print(f"Starting AI Recommendation Service on port {port}")
+    app.run(host='0.0.0.0', port=port)

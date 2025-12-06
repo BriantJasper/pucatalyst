@@ -9,7 +9,8 @@ import RegisterPage from "./pages/auth/RegisterPage";
 import OAuthCallback from "./pages/auth/OAuthCallback";
 
 // Student Pages
-import StudentDashboard from "./pages/student/StudentDashboard";
+// Re-importing Dashboard to clear cache
+import Dashboard from "./pages/student/Dashboard";
 import StudentOnboarding from "./pages/student/StudentOnboarding";
 import RoadmapPage from "./pages/student/RoadmapPage";
 import OrganizationExplorer from "./pages/student/OrganizationExplorer";
@@ -60,7 +61,7 @@ function App() {
                 path="/student/dashboard"
                 element={
                     <ProtectedRoute allowedRoles={["student"]}>
-                        <StudentDashboard />
+                        <Dashboard />
                     </ProtectedRoute>
                 }
             />

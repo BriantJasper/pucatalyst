@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\SkillController;
 use App\Http\Controllers\Api\CertificateController;
 use App\Http\Controllers\Api\RoadmapController;
 use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\DashboardController;
 
 // Public Routes
 Route::post('/auth/register', [AuthController::class, 'register']);
@@ -31,6 +32,9 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/auth/disable-face-auth', [AuthController::class, 'disableFaceAuth']);
     Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
     Route::delete('/auth/delete-account', [AuthController::class, 'deleteAccount']);
+
+    // Dashboard Route
+    Route::get('/dashboard', [DashboardController::class, 'getDashboardData']);
 
     // Student Routes
     Route::apiResource('students', StudentController::class);
@@ -56,7 +60,19 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/certificates', [CertificateController::class, 'index']);
     Route::get('/certificates/{certificate}', [CertificateController::class, 'show']);
 
+    // Course Routes
+    Route::get('/courses', [CourseController::class, 'index']);
+    Route::get('/courses/{course}', [CourseController::class, 'show']);
+
     // Roadmap Routes
+    Route::post('/roadmaps/autocomplete', [RoadmapController::class, 'autocomplete']);
+    Route::get('/roadmaps/current', [RoadmapController::class, 'current']);
+    Route::post('/roadmaps', [RoadmapController::class, 'store']);
+    Route::post('/roadmaps/items', [RoadmapController::class, 'addItem']);
+    Route::patch('/roadmaps/skill-status', [RoadmapController::class, 'updateSkillStatus']);
+    Route::patch('/roadmaps/cert-status', [RoadmapController::class, 'updateCertStatus']);
+    Route::patch('/roadmaps/project-status', [RoadmapController::class, 'updateProjectStatus']);
+    Route::patch('/roadmaps/course-status', [RoadmapController::class, 'updateCourseStatus']);
     Route::post('/roadmaps/generate', [RoadmapController::class, 'generateRoadmap']);
     Route::get('/roadmaps/{student}', [RoadmapController::class, 'show']);
 

@@ -1,14 +1,15 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Mail, Lock, Eye, EyeOff, Rocket, AlertCircle } from "lucide-react";
-import toast from "react-hot-toast";
+import { Mail, Lock, Eye, EyeOff, AlertCircle } from "lucide-react";
+import { useToast } from "../../hooks/use-toast";
 import api from "../../lib/axios";
 import { useAuthStore } from "../../store/authStore";
-import FaceVerificationComponent from "../../components/FaceVerificationComponent";
+import StarryBackground from "../../components/StarryBackground";
 
 export default function LoginPage() {
     const navigate = useNavigate();
     const setAuth = useAuthStore((state) => state.setAuth);
+    const { toast } = useToast();
 
     const [formData, setFormData] = useState({
         login: "",
@@ -28,14 +29,17 @@ export default function LoginPage() {
 
         try {
             const response = await api.post("/auth/login", formData);
-            
+
             // Check if face verification is required
             if (response.data.requires_face_verification) {
                 setTempToken(response.data.temp_token);
                 setPendingUser(response.data.user);
                 setShowFaceVerification(true);
                 setLoading(false);
-                toast.info('Please verify your face to complete login');
+                toast({
+                    title: "Action Required",
+                    description: "Please verify your face to complete login",
+                });
                 return;
             }
 
@@ -45,16 +49,24 @@ export default function LoginPage() {
             localStorage.setItem("access_token", access_token);
             setAuth(user, access_token);
 
-            toast.success(`Welcome back, ${user.name}!`);
+            toast({
+                title: "Welcome back!",
+                description: `Welcome back, ${user.name}!`,
+            });
 
             // Redirect based on role
             redirectBasedOnRole(user);
         } catch (err) {
             const message =
                 err.response?.data?.message ||
+                err.response?.data?.error ||
                 "Login failed. Please try again.";
             setError(message);
-            toast.error(message);
+            toast({
+                variant: "destructive",
+                title: "Login Failed",
+                description: message,
+            });
             setLoading(false);
         }
     };
@@ -72,28 +84,46 @@ export default function LoginPage() {
                 localStorage.setItem("access_token", access_token);
                 setAuth(user, access_token);
 
-                toast.success(`Face verified! Welcome back, ${user.name}! (Confidence: ${confidence.toFixed(1)}%)`);
+                toast({
+                    title: "Face Verified",
+                    description: `Face verified! Welcome back, ${
+                        user.name
+                    }! (Confidence: ${confidence.toFixed(1)}%)`,
+                });
                 setShowFaceVerification(false);
 
                 // Redirect based on role
                 redirectBasedOnRole(user);
             }
         } catch (err) {
-            const message = err.response?.data?.message || err.response?.data?.error || "Face verification failed";
+            const message =
+                err.response?.data?.message ||
+                err.response?.data?.error ||
+                "Face verification failed";
             const confidence = err.response?.data?.confidence;
-            
+
             // Show detailed error message
-            if (message.includes('not match') || message.includes('does not match')) {
-                toast.error(
-                    confidence 
-                        ? `Face does not match! (Confidence: ${confidence.toFixed(1)}%) Please try again or contact support.`
-                        : 'Face does not match! Please ensure good lighting and try again.',
-                    { duration: 5000 }
-                );
+            if (
+                message.includes("not match") ||
+                message.includes("does not match")
+            ) {
+                toast({
+                    variant: "destructive",
+                    title: "Face Mismatch",
+                    description: confidence
+                        ? `Face does not match! (Confidence: ${confidence.toFixed(
+                              1
+                          )}%)`
+                        : "Face verification failed. Please try again.",
+                });
             } else {
-                toast.error(message, { duration: 4000 });
+                toast({
+                    variant: "destructive",
+                    title: "Verification Failed",
+                    description: message,
+                });
             }
-            
+
             setError(message);
             setShowFaceVerification(false);
             setLoading(false);
@@ -104,7 +134,7 @@ export default function LoginPage() {
         setShowFaceVerification(false);
         setTempToken(null);
         setPendingUser(null);
-        toast.info('Face verification cancelled. Please try again.');
+        toast.info("Face verification cancelled. Please try again.");
     };
 
     const redirectBasedOnRole = (user) => {
@@ -118,43 +148,47 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center px-4 py-12">
-            <div className="w-full max-w-md">
+        <div className="min-h-screen flex items-center justify-center px-4 py-12 font-sans relative">
+            <StarryBackground />
+            <div className="w-full max-w-md relative z-10">
                 {/* Logo */}
                 <Link
                     to="/"
                     className="flex items-center justify-center gap-2 mb-8"
                 >
-                    <Rocket className="w-10 h-10 text-primary-600" />
-                    <span className="text-3xl font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
-                        PU Catalyst
-                    </span>
+                    <img
+                        src="/images/logo1.png"
+                        alt="PU Catalyst Logo"
+                        className="h-16 w-auto object-contain" // Adjusted size for auth pages
+                    />
                 </Link>
 
                 {/* Card */}
-                <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+                <div className="bg-black/30 backdrop-blur-md rounded-none shadow-[8px_8px_0px_0px_rgba(255,255,255,0.1)] p-8 border-2 border-white/20">
                     <div className="text-center mb-8">
-                        <h1 className="text-2xl font-bold text-gray-900 mb-2">
+                        <h1 className="text-3xl font-bold text-white mb-2 uppercase">
                             Welcome Back
                         </h1>
-                        <p className="text-gray-600">
+                        <p className="text-gray-300 font-medium">
                             Sign in to continue your journey
                         </p>
                     </div>
 
                     {/* Error Alert */}
                     {error && (
-                        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
-                            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                            <p className="text-red-700 text-sm">{error}</p>
+                        <div className="mb-6 p-4 bg-red-500/20 border-2 border-red-500 flex gap-3 shadow-[4px_4px_0px_0px_rgba(220,38,38,0.4)]">
+                            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                            <p className="text-white text-sm font-bold">
+                                {error}
+                            </p>
                         </div>
                     )}
 
                     {/* Form */}
-                    <form onSubmit={handleSubmit} className="space-y-5">
+                    <form onSubmit={handleSubmit} className="space-y-6">
                         {/* Email or Student ID */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-bold text-white mb-2 uppercase">
                                 Email or Student ID
                             </label>
                             <div className="relative">
@@ -168,16 +202,16 @@ export default function LoginPage() {
                                             login: e.target.value,
                                         })
                                     }
-                                    placeholder="Email or Student ID"
+                                    placeholder="EMAIL OR STUDENT ID"
                                     required
-                                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition"
+                                    className="w-full pl-10 pr-4 py-3 border-2 border-white/20 rounded-none focus:outline-none focus:border-white focus:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.2)] transition-all bg-white/5 text-white font-bold placeholder:text-gray-600"
                                 />
                             </div>
                         </div>
 
                         {/* Password */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-bold text-white mb-2 uppercase">
                                 Password
                             </label>
                             <div className="relative">
@@ -191,16 +225,16 @@ export default function LoginPage() {
                                             password: e.target.value,
                                         })
                                     }
-                                    placeholder="Enter your password"
+                                    placeholder="ENTER YOUR PASSWORD"
                                     required
-                                    className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition"
+                                    className="w-full pl-10 pr-12 py-3 border-2 border-white/20 rounded-none focus:outline-none focus:border-white focus:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.2)] transition-all bg-white/5 text-white font-bold placeholder:text-gray-600"
                                 />
                                 <button
                                     type="button"
                                     onClick={() =>
                                         setShowPassword(!showPassword)
                                     }
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition"
                                 >
                                     {showPassword ? (
                                         <EyeOff className="w-5 h-5" />
@@ -216,15 +250,15 @@ export default function LoginPage() {
                             <label className="flex items-center gap-2 cursor-pointer">
                                 <input
                                     type="checkbox"
-                                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
+                                    className="w-4 h-4 text-white border-2 border-white/50 rounded-none focus:ring-0 focus:shadow-[2px_2px_0px_0px_rgba(255,255,255,0.4)] bg-transparent"
                                 />
-                                <span className="text-sm text-gray-600">
+                                <span className="text-sm text-gray-300 font-bold">
                                     Remember me
                                 </span>
                             </label>
                             <a
                                 href="#"
-                                className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                                className="text-sm text-white hover:text-gray-300 hover:underline font-bold"
                             >
                                 Forgot password?
                             </a>
@@ -234,18 +268,18 @@ export default function LoginPage() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-gradient-to-r from-primary-600 to-secondary-600 text-white py-3 rounded-lg font-semibold hover:from-primary-700 hover:to-secondary-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary-200"
+                            className="w-full bg-white text-black py-4 rounded-none font-bold text-lg hover:bg-gray-200 border-2 border-white transition-all shadow-[4px_4px_0px_0px_rgba(255,255,255,0.2)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none disabled:opacity-50 disabled:cursor-not-allowed uppercase"
                         >
                             {loading ? "Signing in..." : "Sign In"}
                         </button>
                     </form>
 
                     {/* Sign Up Link */}
-                    <p className="text-center mt-6 text-gray-600">
+                    <p className="text-center mt-8 text-gray-300 font-medium">
                         Don't have an account?{" "}
                         <Link
                             to="/register"
-                            className="text-primary-600 hover:text-primary-700 font-semibold"
+                            className="text-white font-bold underline hover:bg-white hover:text-black transition-colors px-1"
                         >
                             Sign up
                         </Link>
@@ -255,11 +289,15 @@ export default function LoginPage() {
 
             {/* Face Verification Modal */}
             {showFaceVerification && (
-                <FaceVerificationComponent
-                    onVerify={handleFaceVerification}
-                    onCancel={handleFaceVerificationCancel}
-                    userEmail={pendingUser?.email}
-                />
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                    <div className="bg-white border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] w-full max-w-lg">
+                        <FaceVerificationComponent
+                            onVerify={handleFaceVerification}
+                            onCancel={handleFaceVerificationCancel}
+                            userEmail={pendingUser?.email}
+                        />
+                    </div>
+                </div>
             )}
         </div>
     );

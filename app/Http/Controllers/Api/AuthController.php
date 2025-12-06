@@ -21,17 +21,26 @@ class AuthController extends Controller
     {
         // Increase time limit for face processing during registration
         set_time_limit(120); // 2 minutes
-        
-        $validator = Validator::make($request->all(), [
+
+        // Build validation rules - student_id is only required for students
+        $rules = [
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
-            'student_id' => 'required|string|max:50|unique:students,student_id',
             'password' => 'required|string|min:8',
             'role' => 'required|in:student,alumni,admin',
             'phone' => 'nullable|string',
             'face_images' => 'nullable|array|min:5',
             'face_images.*' => 'nullable|string',
-        ]);
+        ];
+
+        // Add student_id validation only for students
+        if ($request->role === 'student') {
+            $rules['student_id'] = 'required|string|max:50|unique:students,student_id';
+        } else {
+            $rules['student_id'] = 'nullable|string|max:50';
+        }
+
+        $validator = Validator::make($request->all(), $rules);
 
         if ($validator->fails()) {
             return response()->json($validator->errors(), 400);
@@ -66,10 +75,10 @@ class AuthController extends Controller
                 try {
                     Log::info('Starting face encoding process for user: ' . $user->id);
                     Log::info('Number of face images: ' . count($request->face_images));
-                    
+
                     $faceServiceUrl = env('FACE_RECOGNITION_SERVICE_URL', 'http://localhost:5000');
                     Log::info('Face service URL: ' . $faceServiceUrl);
-                    
+
                     // Increased timeout to 90 seconds for augmentation processing
                     $response = Http::timeout(90)->post($faceServiceUrl . '/encode-faces', [
                         'images' => $request->face_images
@@ -80,12 +89,12 @@ class AuthController extends Controller
 
                     if ($response->successful() && $response->json('success')) {
                         $encoding = $response->json('encoding');
-                        
+
                         Log::info('Encoding received, length: ' . (is_array($encoding) ? count($encoding) : 'not array'));
-                        
+
                         $encodingJson = json_encode($encoding);
                         Log::info('Encoding JSON length: ' . strlen($encodingJson));
-                        
+
                         $updated = $user->update([
                             'face_encoding' => $encodingJson,
                             'face_auth_enabled' => true,
@@ -93,12 +102,11 @@ class AuthController extends Controller
                         ]);
 
                         Log::info('User update result: ' . ($updated ? 'SUCCESS' : 'FAILED'));
-                        
+
                         // Verify the data was saved
                         $user->refresh();
                         Log::info('Verified - face_auth_enabled: ' . ($user->face_auth_enabled ? 'true' : 'false'));
                         Log::info('Verified - face_encoding length: ' . strlen($user->face_encoding ?? ''));
-
                     } else {
                         Log::warning('Face encoding failed: ' . $response->body());
                     }
@@ -129,11 +137,11 @@ class AuthController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'login' => 'required|string',
-            'password' => 'required|string|min:8',
+            'password' => 'required|string',
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
+            return response()->json(['error' => $validator->errors()->first()], 400);
         }
 
         try {
@@ -143,34 +151,32 @@ class AuthController extends Controller
             // Check if login is email or student_id
             if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
                 // Login with email
-                $credentials = [
-                    'email' => $login,
-                    'password' => $request->password,
-                ];
-                
-                if (!$token = JWTAuth::attempt($credentials)) {
-                    return response()->json(['error' => 'Invalid credentials'], 401);
+                $user = User::where('email', $login)->first();
+
+                if (!$user || !Hash::check($request->password, $user->password)) {
+                    return response()->json(['error' => 'Invalid Credentials'], 401);
                 }
-                $user = auth()->user();
+
+                $token = JWTAuth::fromUser($user);
             } else {
                 // Login with student_id - find user by student_id
                 $student = Student::where('student_id', $login)->first();
-                
+
                 if (!$student) {
-                    return response()->json(['error' => 'Invalid credentials'], 401);
+                    return response()->json(['error' => 'Invalid Credentials'], 401);
                 }
-                
+
                 $user = $student->user;
-                
+
                 if (!Hash::check($request->password, $user->password)) {
-                    return response()->json(['error' => 'Invalid credentials'], 401);
+                    return response()->json(['error' => 'Invalid Credentials'], 401);
                 }
-                
+
                 $token = JWTAuth::fromUser($user);
             }
 
             // $user is now set in both branches above
-            
+
             // Check if face authentication is enabled for this user
             if ($user->face_auth_enabled) {
                 // Return temporary token that requires face verification
@@ -185,7 +191,7 @@ class AuthController extends Controller
                     ],
                 ]);
             }
-            
+
             return response()->json([
                 'message' => 'Login successful',
                 'access_token' => $token,
@@ -211,7 +217,7 @@ class AuthController extends Controller
         try {
             Log::info('Face verification request received');
             Log::info('Temp token present: ' . ($request->temp_token ? 'YES' : 'NO'));
-            
+
             // Validate temp token and get user
             JWTAuth::setToken($request->temp_token);
             $user = JWTAuth::authenticate();
@@ -232,12 +238,12 @@ class AuthController extends Controller
 
             // Call face recognition service
             $faceServiceUrl = env('FACE_RECOGNITION_SERVICE_URL', 'http://localhost:5000');
-            
+
             Log::info('Calling face service at: ' . $faceServiceUrl);
-            
+
             $storedEncoding = json_decode($user->face_encoding, true);
             Log::info('Stored encoding array length: ' . (is_array($storedEncoding) ? count($storedEncoding) : 'not array'));
-            
+
             $response = Http::timeout(30)->post($faceServiceUrl . '/verify-face', [
                 'image' => $request->face_image,
                 'stored_encoding' => $storedEncoding
@@ -282,7 +288,6 @@ class AuthController extends Controller
                 'user' => $user,
                 'confidence' => $result['confidence'] ?? 0,
             ]);
-
         } catch (JWTException $e) {
             return response()->json(['error' => 'Token error: ' . $e->getMessage()], 401);
         } catch (\Exception $e) {
@@ -443,7 +448,7 @@ class AuthController extends Controller
     {
         // Increase time limit for face processing (with augmentation takes longer)
         set_time_limit(120); // 2 minutes instead of 30 seconds
-        
+
         $validator = Validator::make($request->all(), [
             'face_images' => 'required|array|min:5',
             'face_images.*' => 'required|string',
@@ -458,7 +463,7 @@ class AuthController extends Controller
 
             // Call face recognition service to encode faces with extended timeout
             $faceServiceUrl = env('FACE_RECOGNITION_SERVICE_URL', 'http://localhost:5000');
-            
+
             // Increased timeout to 90 seconds for augmentation processing
             $response = Http::timeout(90)->post($faceServiceUrl . '/encode-faces', [
                 'images' => $request->face_images
@@ -494,7 +499,6 @@ class AuthController extends Controller
                 'message' => 'Face authentication enabled successfully',
                 'images_processed' => $result['images_processed'] ?? count($request->face_images),
             ]);
-
         } catch (\Exception $e) {
             Log::error('Setup face auth error: ' . $e->getMessage());
             return response()->json([
@@ -517,7 +521,6 @@ class AuthController extends Controller
                 'success' => true,
                 'message' => 'Face authentication disabled successfully'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Disable face auth error: ' . $e->getMessage());
             return response()->json([
@@ -558,7 +561,6 @@ class AuthController extends Controller
                 'success' => true,
                 'message' => 'Password changed successfully'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Change password error: ' . $e->getMessage());
             return response()->json([
@@ -606,7 +608,6 @@ class AuthController extends Controller
                 'success' => true,
                 'message' => 'Account deleted successfully'
             ]);
-
         } catch (\Exception $e) {
             Log::error('Delete account error: ' . $e->getMessage());
             return response()->json([
