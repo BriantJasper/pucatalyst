@@ -4,10 +4,12 @@ import { Mail, Lock, User, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { useToast } from "../../hooks/use-toast";
 import api from "../../lib/axios";
 import StarryBackground from "../../components/StarryBackground";
+import { useAuthStore } from "../../store/authStore";
 
 export default function RegisterPage() {
     const navigate = useNavigate();
     const { toast } = useToast();
+    const setAuth = useAuthStore((state) => state.setAuth);
 
     const [formData, setFormData] = useState({
         name: "",
@@ -99,25 +101,43 @@ export default function RegisterPage() {
 
             const response = await api.post("/auth/register", registrationData);
 
+            // Save the token to auth store so verify-email page can make authenticated requests
+            if (response.data.access_token) {
+                setAuth(response.data.user, response.data.access_token);
+            }
+
             if (response.data.face_auth_enabled) {
                 toast({
                     title: "Registration Successful",
                     description:
-                        "Registration successful with face authentication enabled!",
+                        "Registration successful with face authentication enabled! Please verify your email.",
                 });
             } else {
                 toast({
                     title: "Registration Successful",
-                    description:
-                        "Registration successful! Face authentication will be set up later.",
+                    description: "Please verify your email to continue.",
                 });
             }
 
-            navigate("/login");
+            navigate("/verify-email");
         } catch (err) {
-            const message =
-                err.response?.data?.message ||
-                "Registration failed. Please try again.";
+            console.error("Registration error:", err.response?.data);
+            // Handle validation errors (returned as object with field names)
+            let message = "Registration failed. Please try again.";
+            if (err.response?.data) {
+                if (
+                    typeof err.response.data === "object" &&
+                    !err.response.data.message
+                ) {
+                    // Validation errors are returned as { field: [errors] }
+                    const errors = Object.values(err.response.data).flat();
+                    message = errors.join(", ");
+                } else if (err.response.data.message) {
+                    message = err.response.data.message;
+                } else if (err.response.data.error) {
+                    message = err.response.data.error;
+                }
+            }
             setError(message);
             toast({
                 variant: "destructive",
@@ -143,16 +163,36 @@ export default function RegisterPage() {
         setLoading(true);
 
         try {
-            await api.post("/auth/register", formData);
+            const response = await api.post("/auth/register", formData);
+
+            // Save the token to auth store so verify-email page can make authenticated requests
+            if (response.data.access_token) {
+                setAuth(response.data.user, response.data.access_token);
+            }
+
             toast({
                 title: "Registration Successful",
-                description: "Registration successful! Please login.",
+                description: "Please verify your email to continue.",
             });
-            navigate("/login");
+            navigate("/verify-email");
         } catch (err) {
-            const message =
-                err.response?.data?.message ||
-                "Registration failed. Please try again.";
+            console.error("Registration error:", err.response?.data);
+            // Handle validation errors (returned as object with field names)
+            let message = "Registration failed. Please try again.";
+            if (err.response?.data) {
+                if (
+                    typeof err.response.data === "object" &&
+                    !err.response.data.message
+                ) {
+                    // Validation errors are returned as { field: [errors] }
+                    const errors = Object.values(err.response.data).flat();
+                    message = errors.join(", ");
+                } else if (err.response.data.message) {
+                    message = err.response.data.message;
+                } else if (err.response.data.error) {
+                    message = err.response.data.error;
+                }
+            }
             setError(message);
             toast({
                 variant: "destructive",

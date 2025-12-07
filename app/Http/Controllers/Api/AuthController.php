@@ -7,6 +7,9 @@ use App\Models\User;
 use App\Models\Student;
 use App\Models\Alumni;
 use App\Models\FaceRecognition;
+use App\Models\OtpVerification;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
@@ -176,21 +179,7 @@ class AuthController extends Controller
             }
 
             // $user is now set in both branches above
-
-            // Check if face authentication is enabled for this user
-            if ($user->face_auth_enabled) {
-                // Return temporary token that requires face verification
-                return response()->json([
-                    'message' => 'Face verification required',
-                    'requires_face_verification' => true,
-                    'temp_token' => $token, // This token will be validated during face verification
-                    'user' => [
-                        'id' => $user->id,
-                        'name' => $user->name,
-                        'email' => $user->email,
-                    ],
-                ]);
-            }
+            // Face auth is only used for standalone face login, not as 2FA for credential login
 
             return response()->json([
                 'message' => 'Login successful',
@@ -337,28 +326,83 @@ class AuthController extends Controller
         }
 
         try {
-            $faceRecognition = FaceRecognition::where('is_verified', true)->first();
+            Log::info('Face login attempt started');
 
-            if (!$faceRecognition) {
-                return response()->json(['error' => 'Face not found'], 404);
+            // Get all users with face auth enabled
+            $usersWithFaceAuth = User::where('face_auth_enabled', true)
+                ->whereNotNull('face_encoding')
+                ->get();
+
+            Log::info('Found ' . $usersWithFaceAuth->count() . ' users with face auth enabled');
+
+            if ($usersWithFaceAuth->isEmpty()) {
+                return response()->json([
+                    'error' => 'No users with face authentication enabled'
+                ], 404);
             }
 
-            $user = $faceRecognition->user;
-            $token = JWTAuth::fromUser($user);
+            $faceServiceUrl = env('FACE_RECOGNITION_SERVICE_URL', 'http://localhost:5000');
+            $bestMatch = null;
+            $bestConfidence = 0;
+            $matchThreshold = 70; // Minimum confidence to consider a match
 
-            $faceRecognition->update([
-                'last_login_with_face' => now(),
-                'failed_attempts' => 0,
-            ]);
+            // Compare face against each registered user
+            foreach ($usersWithFaceAuth as $user) {
+                try {
+                    $storedEncoding = json_decode($user->face_encoding, true);
+
+                    if (!$storedEncoding) {
+                        Log::warning('Invalid face encoding for user: ' . $user->id);
+                        continue;
+                    }
+
+                    $response = Http::timeout(15)->post($faceServiceUrl . '/verify-face', [
+                        'image' => $request->face_data,
+                        'stored_encoding' => $storedEncoding
+                    ]);
+
+                    if ($response->successful()) {
+                        $result = $response->json();
+
+                        if ($result['success'] && $result['match']) {
+                            $confidence = $result['confidence'] ?? 0;
+                            Log::info("User {$user->id} matched with confidence: {$confidence}%");
+
+                            if ($confidence > $bestConfidence && $confidence >= $matchThreshold) {
+                                $bestConfidence = $confidence;
+                                $bestMatch = $user;
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Error comparing face for user ' . $user->id . ': ' . $e->getMessage());
+                    continue;
+                }
+            }
+
+            if (!$bestMatch) {
+                Log::warning('Face login failed: No matching face found');
+                return response()->json([
+                    'error' => 'Face not recognized',
+                    'message' => 'No matching face found. Please try again or use password login.'
+                ], 401);
+            }
+
+            // Found a match!
+            Log::info('Face login successful for user: ' . $bestMatch->id . ' with confidence: ' . $bestConfidence);
+
+            $token = JWTAuth::fromUser($bestMatch);
 
             return response()->json([
                 'message' => 'Login with face successful',
                 'access_token' => $token,
                 'token_type' => 'bearer',
-                'user' => $user,
+                'user' => $bestMatch,
+                'confidence' => $bestConfidence,
             ]);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            Log::error('Face login error: ' . $e->getMessage());
+            return response()->json(['error' => 'Face login failed: ' . $e->getMessage()], 500);
         }
     }
 
@@ -582,27 +626,60 @@ class AuthController extends Controller
                 ], 404);
             }
 
-            // Delete related records based on role
-            if ($user->role === 'student') {
-                // Delete student-specific data
-                $user->student()->delete();
-            } elseif ($user->role === 'alumni') {
-                // Delete alumni-specific data
-                $user->alumni()->delete();
+            // Store user info before any operations
+            $userEmail = $user->email;
+            $userId = $user->id;
+            $userRole = $user->role;
+
+            // Invalidate token FIRST before any deletion
+            try {
+                auth()->logout();
+            } catch (\Exception $e) {
+                Log::info('Token invalidation before deletion: ' . $e->getMessage());
             }
 
-            // Delete face recognition data if exists
-            if ($user->face_encoding) {
-                $user->face_encoding = null;
-                $user->face_auth_enabled = false;
-                $user->save();
+            // Now perform deletion - user is already logged out so JWT won't interfere
+            DB::beginTransaction();
+            try {
+                // Delete related records based on role
+                if ($userRole === 'student') {
+                    $student = Student::where('user_id', $userId)->first();
+                    if ($student) {
+                        // Detach pivot table relationships first
+                        $student->skills()->detach();
+                        $student->organizations()->detach();
+                        $student->certificates()->detach();
+
+                        // Delete related records
+                        $student->roadmap()->delete();
+                        $student->recommendations()->delete();
+                        $student->mentorships()->delete();
+
+                        // Delete the student record
+                        $student->forceDelete();
+                    }
+                } elseif ($userRole === 'alumni') {
+                    Alumni::where('user_id', $userId)->forceDelete();
+                }
+
+                // Delete face recognition data if exists
+                FaceRecognition::where('user_id', $userId)->delete();
+
+                // Delete OTP verifications
+                OtpVerification::where('email', $userEmail)->delete();
+
+                // Delete the user (force delete to bypass soft delete)
+                User::where('id', $userId)->forceDelete();
+
+                DB::commit();
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error('Delete account transaction error: ' . $e->getMessage());
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Failed to delete account: ' . $e->getMessage()
+                ], 500);
             }
-
-            // Finally delete the user
-            $user->delete();
-
-            // Invalidate token
-            auth()->logout();
 
             return response()->json([
                 'success' => true,
@@ -610,9 +687,292 @@ class AuthController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Delete account error: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
             return response()->json([
                 'success' => false,
                 'error' => 'Failed to delete account: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Send OTP for email verification.
+     */
+    public function sendVerificationOtp(Request $request)
+    {
+        try {
+            $user = auth()->user();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found'
+                ], 404);
+            }
+
+            if ($user->email_verified) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Email already verified'
+                ], 400);
+            }
+
+            // Create OTP
+            $otp = OtpVerification::createForEmailVerification($user);
+
+            // Send email
+            Mail::send('emails.otp-verification', [
+                'userName' => $user->name,
+                'otp' => $otp->otp,
+                'expiryMinutes' => 15
+            ], function ($message) use ($user) {
+                $message->to($user->email)
+                    ->subject('Verify Your Email - PU Catalyst');
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Verification OTP sent to your email'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Send verification OTP error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to send verification OTP: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Verify OTP for email verification.
+     */
+    public function verifyOtp(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'otp' => 'required|string|size:6',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 400);
+        }
+
+        try {
+            $user = auth()->user();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found'
+                ], 404);
+            }
+
+            if ($user->email_verified) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Email already verified'
+                ]);
+            }
+
+            // Find valid OTP
+            $otp = OtpVerification::findValidOtp($user->email, $request->otp, 'email_verification');
+
+            if (!$otp) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid or expired OTP'
+                ], 400);
+            }
+
+            // Mark OTP as used
+            $otp->markAsUsed();
+
+            // Mark email as verified
+            $user->email_verified = true;
+            $user->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Email verified successfully'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Verify OTP error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to verify OTP: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Resend OTP for email verification.
+     */
+    public function resendOtp(Request $request)
+    {
+        return $this->sendVerificationOtp($request);
+    }
+
+    /**
+     * Update email address (only allowed for unverified accounts).
+     */
+    public function updateEmail(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email|unique:users,email',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => $validator->errors()->first()
+            ], 400);
+        }
+
+        try {
+            $user = auth()->user();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found'
+                ], 404);
+            }
+
+            // Only allow email change if email is not yet verified
+            if ($user->email_verified) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot change email after verification. Please contact support.'
+                ], 400);
+            }
+
+            $oldEmail = $user->email;
+            $newEmail = $request->email;
+
+            // Update user email
+            $user->email = $newEmail;
+            $user->save();
+
+            // Delete old OTPs for the old email
+            OtpVerification::where('email', $oldEmail)->delete();
+
+            // Send new OTP to the new email
+            OtpVerification::createForEmailVerification($user);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Email updated successfully. A new verification code has been sent.',
+                'user' => $user
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Update email error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to update email: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Request password reset (forgot password).
+     */
+    public function forgotPassword(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 400);
+        }
+
+        try {
+            $user = User::where('email', $request->email)->first();
+
+            // Always return success to prevent email enumeration
+            if (!$user) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'If your email is registered, you will receive a password reset code'
+                ]);
+            }
+
+            // Create OTP for password reset
+            $otp = OtpVerification::createForPasswordReset($user->email);
+
+            // Send email
+            Mail::send('emails.password-reset', [
+                'otp' => $otp->otp,
+                'expiryMinutes' => 15
+            ], function ($message) use ($user) {
+                $message->to($user->email)
+                    ->subject('Reset Your Password - PU Catalyst');
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'If your email is registered, you will receive a password reset code'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Forgot password error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to process request: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Reset password with OTP.
+     */
+    public function resetPassword(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+            'otp' => 'required|string|size:6',
+            'password' => 'required|string|min:8',
+            'password_confirmation' => 'required|string|same:password',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 400);
+        }
+
+        try {
+            // Find valid OTP
+            $otp = OtpVerification::findValidOtp($request->email, $request->otp, 'password_reset');
+
+            if (!$otp) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid or expired OTP'
+                ], 400);
+            }
+
+            $user = User::where('email', $request->email)->first();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found'
+                ], 404);
+            }
+
+            // Mark OTP as used
+            $otp->markAsUsed();
+
+            // Update password
+            $user->password = Hash::make($request->password);
+            $user->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Password reset successfully'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Reset password error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to reset password: ' . $e->getMessage()
             ], 500);
         }
     }

@@ -7,6 +7,9 @@ import LandingPage from "./pages/LandingPage3D";
 import LoginPage from "./pages/auth/LoginPage";
 import RegisterPage from "./pages/auth/RegisterPage";
 import OAuthCallback from "./pages/auth/OAuthCallback";
+import VerifyEmailPage from "./pages/auth/VerifyEmailPage";
+import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
 
 // Student Pages
 // Re-importing Dashboard to clear cache
@@ -34,7 +37,16 @@ import Analytics from "./pages/admin/Analytics";
 
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles }) => {
-    const { isAuthenticated, user } = useAuthStore();
+    const { isAuthenticated, user, _hasHydrated } = useAuthStore();
+
+    // Wait for Zustand to hydrate from localStorage before making any decisions
+    if (!_hasHydrated) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-black">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white"></div>
+            </div>
+        );
+    }
 
     if (!isAuthenticated) {
         return <Navigate to="/login" replace />;
@@ -55,6 +67,9 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/auth/callback" element={<OAuthCallback />} />
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             {/* Student Routes */}
             <Route

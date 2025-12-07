@@ -1,10 +1,11 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Mail, Lock, Eye, EyeOff, AlertCircle } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, AlertCircle, Scan } from "lucide-react";
 import { useToast } from "../../hooks/use-toast";
 import api from "../../lib/axios";
 import { useAuthStore } from "../../store/authStore";
 import StarryBackground from "../../components/StarryBackground";
+import FaceVerificationComponent from "../../components/FaceVerificationComponent";
 
 export default function LoginPage() {
     const navigate = useNavigate();
@@ -21,6 +22,7 @@ export default function LoginPage() {
     const [showFaceVerification, setShowFaceVerification] = useState(false);
     const [tempToken, setTempToken] = useState(null);
     const [pendingUser, setPendingUser] = useState(null);
+    const [standaloneFaceLogin, setStandaloneFaceLogin] = useState(false);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -71,73 +73,50 @@ export default function LoginPage() {
         }
     };
 
-    const handleFaceVerification = async (faceImage) => {
-        try {
-            const response = await api.post("/auth/verify-face", {
-                face_image: faceImage,
-                temp_token: tempToken,
-            });
+    // Called when face verification succeeds - component handles the API call internally
+    const handleFaceVerificationSuccess = (responseData) => {
+        const { access_token, user, confidence } = responseData;
 
-            if (response.data.access_token) {
-                const { access_token, user, confidence } = response.data;
+        localStorage.setItem("access_token", access_token);
+        setAuth(user, access_token);
 
-                localStorage.setItem("access_token", access_token);
-                setAuth(user, access_token);
+        toast({
+            title: standaloneFaceLogin ? "Login Successful" : "Face Verified",
+            description: confidence
+                ? `Welcome back, ${
+                      user.name
+                  }! (Confidence: ${confidence.toFixed(1)}%)`
+                : `Welcome back, ${user.name}!`,
+        });
 
-                toast({
-                    title: "Face Verified",
-                    description: `Face verified! Welcome back, ${
-                        user.name
-                    }! (Confidence: ${confidence.toFixed(1)}%)`,
-                });
-                setShowFaceVerification(false);
+        setShowFaceVerification(false);
+        setStandaloneFaceLogin(false);
+        setTempToken(null);
+        setPendingUser(null);
 
-                // Redirect based on role
-                redirectBasedOnRole(user);
-            }
-        } catch (err) {
-            const message =
-                err.response?.data?.message ||
-                err.response?.data?.error ||
-                "Face verification failed";
-            const confidence = err.response?.data?.confidence;
-
-            // Show detailed error message
-            if (
-                message.includes("not match") ||
-                message.includes("does not match")
-            ) {
-                toast({
-                    variant: "destructive",
-                    title: "Face Mismatch",
-                    description: confidence
-                        ? `Face does not match! (Confidence: ${confidence.toFixed(
-                              1
-                          )}%)`
-                        : "Face verification failed. Please try again.",
-                });
-            } else {
-                toast({
-                    variant: "destructive",
-                    title: "Verification Failed",
-                    description: message,
-                });
-            }
-
-            setError(message);
-            setShowFaceVerification(false);
-            setLoading(false);
-        }
+        redirectBasedOnRole(user);
     };
 
     const handleFaceVerificationCancel = () => {
         setShowFaceVerification(false);
         setTempToken(null);
         setPendingUser(null);
-        toast.info("Face verification cancelled. Please try again.");
+        setStandaloneFaceLogin(false);
+    };
+
+    const handleStandaloneFaceLogin = () => {
+        setStandaloneFaceLogin(true);
+        setShowFaceVerification(true);
+        setError("");
     };
 
     const redirectBasedOnRole = (user) => {
+        // Check if email is verified first
+        if (!user.email_verified) {
+            navigate("/verify-email");
+            return;
+        }
+
         if (user.role === "student") {
             navigate("/student/dashboard");
         } else if (user.role === "alumni") {
@@ -159,7 +138,7 @@ export default function LoginPage() {
                     <img
                         src="/images/logo1.png"
                         alt="PU Catalyst Logo"
-                        className="h-16 w-auto object-contain" // Adjusted size for auth pages
+                        className="h-16 w-auto object-contain"
                     />
                 </Link>
 
@@ -256,12 +235,12 @@ export default function LoginPage() {
                                     Remember me
                                 </span>
                             </label>
-                            <a
-                                href="#"
+                            <Link
+                                to="/forgot-password"
                                 className="text-sm text-white hover:text-gray-300 hover:underline font-bold"
                             >
                                 Forgot password?
-                            </a>
+                            </Link>
                         </div>
 
                         {/* Submit Button */}
@@ -271,6 +250,26 @@ export default function LoginPage() {
                             className="w-full bg-white text-black py-4 rounded-none font-bold text-lg hover:bg-gray-200 border-2 border-white transition-all shadow-[4px_4px_0px_0px_rgba(255,255,255,0.2)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none disabled:opacity-50 disabled:cursor-not-allowed uppercase"
                         >
                             {loading ? "Signing in..." : "Sign In"}
+                        </button>
+
+                        {/* OR Divider */}
+                        <div className="flex items-center gap-4 my-6">
+                            <div className="flex-1 h-px bg-white/20"></div>
+                            <span className="text-gray-400 text-sm font-bold uppercase">
+                                Or
+                            </span>
+                            <div className="flex-1 h-px bg-white/20"></div>
+                        </div>
+
+                        {/* Face Login Button */}
+                        <button
+                            type="button"
+                            onClick={handleStandaloneFaceLogin}
+                            disabled={loading}
+                            className="w-full bg-transparent text-white py-4 rounded-none font-bold text-lg border-2 border-white/50 hover:border-white hover:bg-white/10 transition-all shadow-[4px_4px_0px_0px_rgba(255,255,255,0.1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none disabled:opacity-50 disabled:cursor-not-allowed uppercase flex items-center justify-center gap-3"
+                        >
+                            <Scan className="w-6 h-6" />
+                            Login with Face
                         </button>
                     </form>
 
@@ -287,17 +286,15 @@ export default function LoginPage() {
                 </div>
             </div>
 
-            {/* Face Verification Modal */}
+            {/* Face Verification Modal - component handles its own portal */}
             {showFaceVerification && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-                    <div className="bg-white border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] w-full max-w-lg">
-                        <FaceVerificationComponent
-                            onVerify={handleFaceVerification}
-                            onCancel={handleFaceVerificationCancel}
-                            userEmail={pendingUser?.email}
-                        />
-                    </div>
-                </div>
+                <FaceVerificationComponent
+                    onVerify={handleFaceVerificationSuccess}
+                    onCancel={handleFaceVerificationCancel}
+                    userEmail={standaloneFaceLogin ? null : pendingUser?.email}
+                    tempToken={tempToken}
+                    isStandalone={standaloneFaceLogin}
+                />
             )}
         </div>
     );

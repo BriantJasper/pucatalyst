@@ -21,6 +21,10 @@ Route::post('/auth/login-face', [AuthController::class, 'loginWithFace']);
 Route::get('/auth/google', [AuthController::class, 'redirectToGoogle']);
 Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback']);
 
+// Public Password Reset Routes
+Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
+
 // Protected Routes
 Route::middleware('auth:api')->group(function () {
     // Auth Routes
@@ -32,6 +36,12 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/auth/disable-face-auth', [AuthController::class, 'disableFaceAuth']);
     Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
     Route::delete('/auth/delete-account', [AuthController::class, 'deleteAccount']);
+
+    // Email Verification OTP Routes
+    Route::post('/auth/send-verification-otp', [AuthController::class, 'sendVerificationOtp']);
+    Route::post('/auth/verify-otp', [AuthController::class, 'verifyOtp']);
+    Route::post('/auth/resend-otp', [AuthController::class, 'resendOtp']);
+    Route::post('/auth/update-email', [AuthController::class, 'updateEmail']);
 
     // Dashboard Route
     Route::get('/dashboard', [DashboardController::class, 'getDashboardData']);

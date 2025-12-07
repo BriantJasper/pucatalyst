@@ -33,11 +33,32 @@ api.interceptors.response.use(
     },
     (error) => {
         if (error.response && error.response.status === 401) {
-            // Clear local storage
-            localStorage.removeItem("auth-storage");
+            const pathname = window.location.pathname;
 
-            // Redirect to login if not already there
-            if (window.location.pathname !== "/login") {
+            // Don't auto-redirect on auth-related pages (they handle their own errors)
+            const authPages = [
+                "/login",
+                "/register",
+                "/verify-email",
+                "/forgot-password",
+                "/reset-password",
+            ];
+            const isAuthPage = authPages.some((page) =>
+                pathname.startsWith(page)
+            );
+
+            // Don't auto-redirect on protected areas - let ProtectedRoute handle it
+            // This prevents race conditions with Zustand hydration
+            const protectedAreas = ["/student/", "/alumni/", "/admin/"];
+            const isProtectedArea = protectedAreas.some((area) =>
+                pathname.startsWith(area)
+            );
+
+            // Only auto-redirect on public pages (landing, etc.)
+            if (!isAuthPage && !isProtectedArea) {
+                // Clear local storage
+                localStorage.removeItem("auth-storage");
+                // Redirect to login
                 window.location.href = "/login";
             }
         }

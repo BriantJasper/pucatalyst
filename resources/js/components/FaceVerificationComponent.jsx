@@ -1,311 +1,494 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { Camera, X, CheckCircle, AlertCircle, Loader, Shield } from 'lucide-react';
+import React, { useRef, useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
+import {
+    Camera,
+    X,
+    CheckCircle2,
+    AlertCircle,
+    Loader,
+    Shield,
+    Scan,
+    RefreshCw,
+} from "lucide-react";
+import api from "../lib/axios";
 
-const FaceVerificationComponent = ({ onVerify, onCancel, userEmail }) => {
+const FaceVerificationComponent = ({
+    onVerify,
+    onCancel,
+    userEmail,
+    tempToken,
+    isStandalone = false,
+}) => {
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
+    const overlayCanvasRef = useRef(null);
     const streamRef = useRef(null);
-    
+    const faceDetectionIntervalRef = useRef(null);
+    const lockStartTimeRef = useRef(null);
+    const progressIntervalRef = useRef(null);
+
     const [cameraReady, setCameraReady] = useState(false);
     const [isVerifying, setIsVerifying] = useState(false);
     const [error, setError] = useState(null);
-    const [countdown, setCountdown] = useState(3);
     const [capturedImage, setCapturedImage] = useState(null);
+    const [faceDetected, setFaceDetected] = useState(false);
+    const [scanningPhase, setScanningPhase] = useState("searching");
+    const [verificationFailed, setVerificationFailed] = useState(false);
+
+    const LOCK_DURATION = 1500;
 
     useEffect(() => {
         startCamera();
         return () => {
-            stopCamera();
+            cleanup();
         };
     }, []);
 
-    // Auto-verify after camera is ready
-    useEffect(() => {
-        if (!cameraReady || isVerifying) return;
-
-        const countdownInterval = setInterval(() => {
-            setCountdown(prev => {
-                if (prev <= 1) {
-                    clearInterval(countdownInterval);
-                    captureAndVerify();
-                    return 0;
-                }
-                return prev - 1;
-            });
-        }, 1000);
-
-        return () => clearInterval(countdownInterval);
-    }, [cameraReady]);
-
-    const startCamera = async () => {
-        try {
-            setError(null);
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                    facingMode: 'user'
-                },
-                audio: false
-            });
-
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                streamRef.current = stream;
-                
-                videoRef.current.onloadedmetadata = () => {
-                    setCameraReady(true);
-                };
-            }
-        } catch (err) {
-            console.error('Error accessing camera:', err);
-            setError('Unable to access camera. Please grant camera permissions.');
+    const cleanup = () => {
+        if (faceDetectionIntervalRef.current) {
+            clearInterval(faceDetectionIntervalRef.current);
+            faceDetectionIntervalRef.current = null;
         }
-    };
-
-    const stopCamera = () => {
+        if (progressIntervalRef.current) {
+            clearInterval(progressIntervalRef.current);
+            progressIntervalRef.current = null;
+        }
         if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current.getTracks().forEach((track) => track.stop());
             streamRef.current = null;
         }
         if (videoRef.current) {
             videoRef.current.srcObject = null;
         }
-        setCameraReady(false);
     };
 
-    const captureAndVerify = async () => {
+    const startCamera = async () => {
+        try {
+            setError(null);
+            setVerificationFailed(false);
+            setCapturedImage(null);
+            setScanningPhase("searching");
+
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    facingMode: "user",
+                },
+                audio: false,
+            });
+
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                streamRef.current = stream;
+
+                videoRef.current.onloadedmetadata = () => {
+                    setCameraReady(true);
+                    startFaceDetection();
+                };
+            }
+        } catch (err) {
+            console.error("Error accessing camera:", err);
+            setError(
+                "Unable to access camera. Please grant camera permissions."
+            );
+        }
+    };
+
+    const captureAndVerify = useCallback(async () => {
         if (!videoRef.current || !canvasRef.current || isVerifying) return;
 
+        // Stop all intervals
+        if (faceDetectionIntervalRef.current) {
+            clearInterval(faceDetectionIntervalRef.current);
+            faceDetectionIntervalRef.current = null;
+        }
+        if (progressIntervalRef.current) {
+            clearInterval(progressIntervalRef.current);
+            progressIntervalRef.current = null;
+        }
+
         setIsVerifying(true);
-        setError(null);
+        setScanningPhase("verifying");
 
         try {
             const video = videoRef.current;
             const canvas = canvasRef.current;
-            
+
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
-            
-            const context = canvas.getContext('2d');
+
+            const context = canvas.getContext("2d");
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            // Center oval crop - only send the center 40%x60% region
-            const ovalWidthRatio = 0.4; // 40% of video width
-            const ovalHeightRatio = 0.6; // 60% of video height
-            
-            const ovalWidth = canvas.width * ovalWidthRatio;
-            const ovalHeight = canvas.height * ovalHeightRatio;
-            const ovalX = (canvas.width - ovalWidth) / 2;
-            const ovalY = (canvas.height - ovalHeight) / 2;
-            
-            // Create cropped canvas with only the center oval region
-            const croppedCanvas = document.createElement('canvas');
-            croppedCanvas.width = ovalWidth;
-            croppedCanvas.height = ovalHeight;
-            const croppedContext = croppedCanvas.getContext('2d');
-            
-            croppedContext.drawImage(
-                canvas,
-                ovalX, ovalY, ovalWidth, ovalHeight,
-                0, 0, ovalWidth, ovalHeight
-            );
-            
-            // Convert cropped image to base64
-            const imageData = croppedCanvas.toDataURL('image/jpeg', 0.9);
+
+            const imageData = canvas.toDataURL("image/jpeg", 0.9);
             setCapturedImage(imageData);
-            
-            // Send to verification
-            stopCamera();
-            onVerify(imageData);
-            
+
+            // Stop camera while verifying
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach((track) => track.stop());
+            }
+
+            // Call verification API
+            let response;
+            if (isStandalone) {
+                // Standalone face login - identify user by face
+                response = await api.post("/auth/login-face", {
+                    face_data: imageData,
+                });
+            } else {
+                // Two-factor verification - verify against known user
+                response = await api.post("/auth/verify-face", {
+                    face_image: imageData,
+                    temp_token: tempToken,
+                });
+            }
+
+            if (response.data.access_token) {
+                // Success - pass result to parent
+                onVerify(response.data);
+            } else {
+                // API returned but no token - treat as failure
+                throw new Error(response.data.message || "Verification failed");
+            }
         } catch (err) {
-            console.error('Error capturing image:', err);
-            setError('Failed to capture image. Please try again.');
+            console.error("Verification error:", err);
+            const message =
+                err.response?.data?.message ||
+                err.response?.data?.error ||
+                err.message ||
+                "Face verification failed. Please try again.";
+
+            setError(message);
+            setVerificationFailed(true);
             setIsVerifying(false);
+            setScanningPhase("failed");
         }
+    }, [isVerifying, onVerify, tempToken, isStandalone]);
+
+    const startFaceDetection = () => {
+        faceDetectionIntervalRef.current = setInterval(async () => {
+            if (!videoRef.current || !overlayCanvasRef.current || isVerifying)
+                return;
+
+            const video = videoRef.current;
+            const canvas = overlayCanvasRef.current;
+            const ctx = canvas.getContext("2d");
+
+            if (canvas.width !== video.videoWidth) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            try {
+                const tempCanvas = document.createElement("canvas");
+                tempCanvas.width = video.videoWidth;
+                tempCanvas.height = video.videoHeight;
+                const tempCtx = tempCanvas.getContext("2d");
+                tempCtx.drawImage(video, 0, 0);
+                const imageData = tempCanvas.toDataURL("image/jpeg", 0.8);
+
+                const response = await fetch(
+                    "http://localhost:5000/detect-face",
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            image: imageData.split(",")[1],
+                        }),
+                    }
+                );
+
+                const result = await response.json();
+                const detected = result.face_detected === true;
+
+                if (detected && result.num_faces === 1) {
+                    setFaceDetected(true);
+                    setError(null);
+
+                    if (!lockStartTimeRef.current) {
+                        lockStartTimeRef.current = Date.now();
+                        setScanningPhase("locking");
+
+                        if (!progressIntervalRef.current) {
+                            progressIntervalRef.current = setInterval(() => {
+                                if (!lockStartTimeRef.current) return;
+
+                                const elapsed =
+                                    Date.now() - lockStartTimeRef.current;
+                                if (elapsed >= LOCK_DURATION) {
+                                    clearInterval(progressIntervalRef.current);
+                                    progressIntervalRef.current = null;
+                                    captureAndVerify();
+                                }
+                            }, 50);
+                        }
+                    }
+                } else {
+                    setFaceDetected(false);
+                    lockStartTimeRef.current = null;
+                    setScanningPhase("searching");
+
+                    if (progressIntervalRef.current) {
+                        clearInterval(progressIntervalRef.current);
+                        progressIntervalRef.current = null;
+                    }
+
+                    if (result.num_faces > 1) {
+                        setError(
+                            "Multiple people detected! Please ensure only you are visible."
+                        );
+                    }
+                }
+
+                // Draw face overlay
+                if (result.faces && result.faces.length > 0) {
+                    const scaleX = canvas.width / video.videoWidth;
+                    const scaleY = canvas.height / video.videoHeight;
+
+                    result.faces.forEach((face) => {
+                        const x = face.x * scaleX;
+                        const y = face.y * scaleY;
+                        const width = face.width * scaleX;
+                        const height = face.height * scaleY;
+                        const color =
+                            result.num_faces === 1 ? "#22d3ee" : "#ef4444";
+
+                        ctx.strokeStyle = color;
+                        ctx.lineWidth = 3;
+                        ctx.shadowColor = color;
+                        ctx.shadowBlur = 15;
+                        ctx.strokeRect(x, y, width, height);
+                        ctx.shadowBlur = 0;
+                    });
+                }
+            } catch (err) {
+                setFaceDetected(false);
+                lockStartTimeRef.current = null;
+                setScanningPhase("searching");
+            }
+        }, 300);
     };
 
     const handleRetry = () => {
+        cleanup();
         setCapturedImage(null);
         setError(null);
         setIsVerifying(false);
-        setCountdown(3);
+        setFaceDetected(false);
+        setVerificationFailed(false);
+        setScanningPhase("searching");
+        lockStartTimeRef.current = null;
+        setCameraReady(false);
         startCamera();
     };
 
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full">
+    const getStatusText = () => {
+        if (scanningPhase === "verifying") return "Verifying identity...";
+        if (scanningPhase === "locking") return "Face detected - Hold still...";
+        if (scanningPhase === "failed") return "Verification failed";
+        return "Scanning for face...";
+    };
+
+    return createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-md" />
+
+            <div className="relative w-full max-w-lg rounded-2xl border-2 border-white/20 bg-black/90 backdrop-blur-xl shadow-[0_0_60px_rgba(0,0,0,0.5)] animate-fade-up overflow-hidden">
                 {/* Header */}
-                <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-6 relative">
-                    <div className="flex items-center mb-2">
-                        <Shield className="w-6 h-6 mr-3" />
-                        <h2 className="text-2xl font-bold">Face Verification Required</h2>
+                <div className="flex items-center justify-between p-4 border-b border-white/10">
+                    <div className="flex items-center gap-3">
+                        <div
+                            className={`p-2 rounded-lg border ${
+                                verificationFailed
+                                    ? "bg-red-500/20 text-red-400 border-red-500/30"
+                                    : "bg-cyan-500/20 text-cyan-400 border-cyan-500/30"
+                            }`}
+                        >
+                            <Shield className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-bold text-white">
+                                {verificationFailed
+                                    ? "Verification Failed"
+                                    : "Face Verification"}
+                            </h2>
+                            <p className="text-gray-500 text-xs">
+                                {verificationFailed
+                                    ? "Face did not match - Please try again"
+                                    : "Look at the camera to verify"}
+                            </p>
+                        </div>
                     </div>
-                    <p className="text-purple-100 text-sm">
-                        Two-factor authentication for enhanced security
-                    </p>
                     {!isVerifying && (
                         <button
                             onClick={onCancel}
-                            className="absolute top-4 right-4 text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors"
+                            className="p-2 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all"
                         >
                             <X className="w-5 h-5" />
                         </button>
                     )}
                 </div>
 
-                <div className="p-6">
-                    {/* Error Message */}
-                    {error && (
-                        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start">
-                            <AlertCircle className="w-5 h-5 text-red-500 mr-3 flex-shrink-0 mt-0.5" />
-                            <div className="flex-1">
-                                <p className="text-red-700 text-sm">{error}</p>
+                {/* Camera / Error State */}
+                <div className="relative" style={{ aspectRatio: "4/3" }}>
+                    {verificationFailed ? (
+                        // Failed state - show captured image with error overlay
+                        <div className="relative w-full h-full">
+                            {capturedImage && (
+                                <img
+                                    src={capturedImage}
+                                    alt="Captured"
+                                    className="w-full h-full object-cover opacity-50"
+                                />
+                            )}
+                            <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center p-6">
+                                <div className="w-20 h-20 rounded-full bg-red-500/20 border-2 border-red-500 flex items-center justify-center mb-4">
+                                    <X className="w-10 h-10 text-red-500" />
+                                </div>
+                                <h3 className="text-xl font-bold text-white mb-2">
+                                    Face Not Recognized
+                                </h3>
+                                <p className="text-gray-400 text-center text-sm mb-6 max-w-xs">
+                                    {error ||
+                                        "The captured face did not match your registered face. Please try again."}
+                                </p>
+                                <button
+                                    onClick={handleRetry}
+                                    className="flex items-center gap-2 px-6 py-3 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-xl transition-all shadow-lg shadow-cyan-500/30"
+                                >
+                                    <RefreshCw className="w-5 h-5" />
+                                    Try Again
+                                </button>
                             </div>
                         </div>
-                    )}
+                    ) : !capturedImage ? (
+                        // Camera state
+                        <>
+                            <video
+                                ref={videoRef}
+                                autoPlay
+                                playsInline
+                                muted
+                                className="w-full h-full object-cover"
+                            />
+                            <canvas ref={canvasRef} className="hidden" />
+                            <canvas
+                                ref={overlayCanvasRef}
+                                className="absolute inset-0 w-full h-full pointer-events-none"
+                            />
 
-                    {/* Camera Feed or Captured Image */}
-                    <div className="mb-6">
-                        <div className="relative bg-gray-900 rounded-lg overflow-hidden" style={{ aspectRatio: '4/3' }}>
-                            {!capturedImage ? (
-                                <>
-                                    <video
-                                        ref={videoRef}
-                                        autoPlay
-                                        playsInline
-                                        muted
-                                        className="w-full h-full object-cover"
+                            {/* Overlay */}
+                            <div className="absolute inset-0 pointer-events-none">
+                                <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/50" />
+
+                                {cameraReady &&
+                                    scanningPhase === "searching" && (
+                                        <div
+                                            className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-80"
+                                            style={{
+                                                animation:
+                                                    "scanLine 2s ease-in-out infinite",
+                                            }}
+                                        />
+                                    )}
+
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <div
+                                        className={`w-48 h-60 rounded-full border-4 transition-all duration-300 ${
+                                            faceDetected
+                                                ? "border-green-400 shadow-[0_0_40px_rgba(74,222,128,0.5)]"
+                                                : "border-white/30"
+                                        }`}
                                     />
-                                    <canvas ref={canvasRef} className="hidden" />
+                                </div>
+                            </div>
 
-                                    {/* Camera Status */}
-                                    {!cameraReady && (
-                                        <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
-                                            <div className="text-center text-white">
-                                                <Loader className="w-8 h-8 animate-spin mx-auto mb-2" />
-                                                <p>Initializing camera...</p>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Face Guide Overlay with Loading Circle */}
-                                    {cameraReady && countdown > 0 && (
-                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                            <div className="relative">
-                                                {/* Oval guide */}
-                                                <div className="w-64 h-80 border-4 border-blue-500 rounded-full opacity-50"></div>
-                                                
-                                                {/* Loading circle animation */}
-                                                <div className="absolute inset-0 flex items-center justify-center">
-                                                    <svg className="w-72 h-88" style={{ transform: 'rotate(-90deg)' }}>
-                                                        <circle
-                                                            cx="144"
-                                                            cy="176"
-                                                            r="140"
-                                                            stroke="#3b82f6"
-                                                            strokeWidth="6"
-                                                            fill="none"
-                                                            strokeDasharray="880"
-                                                            strokeDashoffset={880 * (countdown / 3)}
-                                                            className="transition-all duration-1000 ease-linear"
-                                                        />
-                                                    </svg>
-                                                </div>
-                                                
-                                                {/* Countdown number */}
-                                                <div className="absolute inset-0 flex items-center justify-center">
-                                                    <div className="text-white text-6xl font-bold bg-black bg-opacity-50 rounded-full w-24 h-24 flex items-center justify-center">
-                                                        {countdown}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Instruction */}
-                                    {cameraReady && countdown > 0 && (
-                                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-6">
-                                            <p className="text-white text-center text-lg font-semibold">
-                                                Position your face in the circle - Verifying in {countdown}...
-                                            </p>
-                                        </div>
-                                    )}
-                                </>
+                            {!cameraReady ? (
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+                                    <div className="text-center text-white">
+                                        <Loader className="w-8 h-8 animate-spin mx-auto mb-2 text-cyan-400" />
+                                        <p className="font-medium">
+                                            Initializing camera...
+                                        </p>
+                                    </div>
+                                </div>
                             ) : (
-                                <div className="relative">
-                                    <img
-                                        src={capturedImage}
-                                        alt="Captured face"
-                                        className="w-full h-full object-cover"
-                                    />
-                                    {isVerifying && (
-                                        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                                            <div className="text-center text-white">
-                                                <Loader className="w-12 h-12 animate-spin mx-auto mb-4" />
-                                                <p className="text-xl font-semibold">Verifying your identity...</p>
-                                                <p className="text-sm text-gray-300 mt-2">Please wait</p>
-                                            </div>
-                                        </div>
-                                    )}
+                                <div className="absolute bottom-0 left-0 right-0 p-4 text-center">
+                                    <div
+                                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-sm border ${
+                                            faceDetected
+                                                ? "bg-green-900/60 border-green-500/30"
+                                                : "bg-black/60 border-white/20"
+                                        }`}
+                                    >
+                                        {faceDetected ? (
+                                            <CheckCircle2 className="w-4 h-4 text-green-400" />
+                                        ) : (
+                                            <Scan className="w-4 h-4 text-cyan-400 animate-pulse" />
+                                        )}
+                                        <span
+                                            className={`text-sm font-medium ${
+                                                faceDetected
+                                                    ? "text-green-300"
+                                                    : "text-white"
+                                            }`}
+                                        >
+                                            {getStatusText()}
+                                        </span>
+                                    </div>
                                 </div>
                             )}
-                        </div>
-                    </div>
-
-                    {/* Instructions */}
-                    {!capturedImage && cameraReady && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                            <h3 className="font-semibold text-blue-900 mb-2 flex items-center">
-                                <Camera className="w-4 h-4 mr-2" />
-                                For successful verification:
-                            </h3>
-                            <ul className="text-sm text-blue-800 space-y-1">
-                                <li>• Look directly at the camera</li>
-                                <li>• Keep your face inside the blue oval</li>
-                                <li>• Ensure your face is well-lit</li>
-                                <li>• Remove glasses if possible</li>
-                                <li>• Stay still during capture</li>
-                            </ul>
-                            <div className="mt-3 bg-purple-100 border border-purple-300 rounded p-2">
-                                <p className="text-xs text-purple-800">
-                                    💡 <strong>Center Focus:</strong> Only your face inside the oval will be verified. Background faces are ignored.
-                                </p>
+                        </>
+                    ) : (
+                        // Verifying state
+                        <div className="relative w-full h-full">
+                            <img
+                                src={capturedImage}
+                                alt="Captured"
+                                className="w-full h-full object-cover"
+                            />
+                            <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
+                                <div className="text-center text-white">
+                                    <Loader className="w-12 h-12 animate-spin mx-auto mb-4 text-cyan-400" />
+                                    <p className="text-xl font-bold">
+                                        Verifying...
+                                    </p>
+                                    <p className="text-sm text-gray-400 mt-1">
+                                        Please wait
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     )}
+                </div>
 
-                    {/* Action Buttons - Only show retry on error */}
-                    {!isVerifying && error && (
-                        <div className="flex gap-3 justify-end">
-                            <button
-                                onClick={onCancel}
-                                className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleRetry}
-                                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center"
-                            >
-                                <Camera className="w-5 h-5 mr-2" />
-                                Try Again
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Security Note */}
-                    <div className="mt-6 pt-6 border-t border-gray-200">
-                        <p className="text-xs text-gray-500 text-center flex items-center justify-center">
-                            <Shield className="w-3 h-3 mr-1" />
-                            Your facial data is encrypted and securely stored
-                        </p>
+                {/* Error message for non-verification errors */}
+                {error && !verificationFailed && (
+                    <div className="p-4 bg-amber-900/20 border-t border-amber-500/30 flex items-center gap-3">
+                        <AlertCircle className="w-5 h-5 text-amber-400" />
+                        <p className="text-amber-300 text-sm flex-1">{error}</p>
                     </div>
+                )}
+
+                <div className="p-3 border-t border-white/10 text-center">
+                    <p className="text-xs text-gray-500 flex items-center justify-center gap-1">
+                        <Shield className="w-3 h-3" />
+                        Secure facial verification
+                    </p>
                 </div>
             </div>
-        </div>
+
+            <style>{`
+                @keyframes scanLine {
+                    0%, 100% { top: 10%; }
+                    50% { top: 90%; }
+                }
+            `}</style>
+        </div>,
+        document.body
     );
 };
 

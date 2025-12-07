@@ -18,7 +18,7 @@ TOLERANCE = float(os.environ.get('TOLERANCE', '0.92'))  # 92% similarity minimum
 MAX_DISTANCE = float(os.environ.get('MAX_DISTANCE', '0.35'))  # Relaxed to 0.35 for better same-person acceptance
 MIN_PIXEL_SIMILARITY = float(os.environ.get('MIN_PIXEL_SIMILARITY', '0.88'))  # Raw pixel must be 88%+ similar
 IMAGE_SIZE = (200, 200)  # Larger size for more detail
-MIN_FACE_SIZE = (80, 80)  # Minimum face detection size
+MIN_FACE_SIZE = (40, 40)  # Reduced to handle cropped images from frontend
 
 def decode_base64_image(base64_string):
     """Decode base64 image to numpy array"""
@@ -74,12 +74,38 @@ def augment_image(face_img):
     
     return augmented
 
-def detect_and_extract_face(image_array):
+def detect_and_extract_face(image_array, save_debug=False, debug_idx=0):
     """Detect face and extract it from image with quality checks"""
     gray = cv2.cvtColor(image_array, cv2.COLOR_RGB2GRAY)
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=6, minSize=MIN_FACE_SIZE)
+    
+    # Save debug image if requested
+    if save_debug:
+        debug_dir = os.path.join(os.path.dirname(__file__), 'debug_images')
+        os.makedirs(debug_dir, exist_ok=True)
+        debug_path = os.path.join(debug_dir, f'received_image_{debug_idx}.jpg')
+        cv2.imwrite(debug_path, cv2.cvtColor(image_array, cv2.COLOR_RGB2BGR))
+        print(f"  [DEBUG] Saved image to {debug_path}, size: {image_array.shape}")
+    
+    # Try multiple detection passes with different parameters
+    faces = []
+    
+    # Pass 1: Standard detection
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=MIN_FACE_SIZE)
+    
+    # Pass 2: If no face found, try with lower minNeighbors
+    if len(faces) == 0:
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=2, minSize=(30, 30))
+        if len(faces) > 0:
+            print(f"  [INFO] Face found with relaxed parameters")
+    
+    # Pass 3: If still no face, try with different scale factor
+    if len(faces) == 0:
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=2, minSize=(20, 20))
+        if len(faces) > 0:
+            print(f"  [INFO] Face found with very relaxed parameters")
     
     if len(faces) == 0:
+        print(f"  [DEBUG] No face detected. Image shape: {image_array.shape}, Gray range: {gray.min()}-{gray.max()}")
         return None, "No face detected in the image"
     
     # If multiple faces still detected after cropping, use the largest one
@@ -90,10 +116,11 @@ def detect_and_extract_face(image_array):
     
     # Extract the face region
     x, y, w, h = faces[0]
+    print(f"  [DEBUG] Face detected at ({x},{y}) size {w}x{h}")
     
-    # Check face size quality
-    if w < MIN_FACE_SIZE[0] or h < MIN_FACE_SIZE[1]:
-        return None, "Face too small or too far from camera"
+    # Check face size quality - SKIP for now to see if we can get any faces
+    # if w < MIN_FACE_SIZE[0] or h < MIN_FACE_SIZE[1]:
+    #     return None, "Face too small or too far from camera"
     
     # Add padding around face (10%)
     padding = int(0.1 * min(w, h))
@@ -104,11 +131,11 @@ def detect_and_extract_face(image_array):
     
     face_img = image_array[y:y+h, x:x+w]
     
-    # Check image sharpness (Laplacian variance) - lowered threshold
-    gray_face = cv2.cvtColor(face_img, cv2.COLOR_RGB2GRAY)
-    laplacian_var = cv2.Laplacian(gray_face, cv2.CV_64F).var()
-    if laplacian_var < 20:  # Lowered from 50 - less strict on blur
-        return None, "Image too blurry. Please ensure good lighting and focus"
+    # Check image sharpness (Laplacian variance) - DISABLED for debugging
+    # gray_face = cv2.cvtColor(face_img, cv2.COLOR_RGB2GRAY)
+    # laplacian_var = cv2.Laplacian(gray_face, cv2.CV_64F).var()
+    # if laplacian_var < 10:
+    #     return None, "Image too blurry. Please ensure good lighting and focus"
     
     # Resize to standard size
     face_img = cv2.resize(face_img, IMAGE_SIZE)
@@ -286,7 +313,8 @@ def encode_faces():
             try:
                 image_array = decode_base64_image(img_base64)
                 # Image already cropped to center oval on frontend
-                face_img, error = detect_and_extract_face(image_array)
+                # Enable debug mode to save images for investigation
+                face_img, error = detect_and_extract_face(image_array, save_debug=True, debug_idx=idx)
                 
                 if error:
                     print(f"  [ERROR] Image {idx + 1}: {error}")

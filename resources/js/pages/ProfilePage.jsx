@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import axios from "../lib/axios";
 import { useToast } from "../hooks/use-toast";
@@ -28,7 +29,8 @@ import StarryBackground from "../components/StarryBackground";
 import { useAuthStore } from "../store/authStore";
 
 const ProfilePage = () => {
-    const { user: authUser, setAuth } = useAuthStore();
+    const navigate = useNavigate();
+    const { user: authUser, setAuth, logout } = useAuthStore();
     const { toast } = useToast();
     const [user, setUser] = useState(null);
     const [activeTab, setActiveTab] = useState("profile");
@@ -79,17 +81,18 @@ const ProfilePage = () => {
 
     const fetchProfile = async () => {
         try {
+            // First get current user from /auth/me
             const response = await axios.get("/auth/me");
             const userData = response.data;
             setUser(userData);
-            setAuth(userData, localStorage.getItem("access_token"));
 
-            // Fetch student details
-            // Assuming the user ID is needed or we have a specific endpoint for current student profile
-            // For now, let's try fetching student data using the user ID if available,
-            // or we might need an endpoint like /api/students/me if implemented,
-            // but based on controller we have show(id) which takes user_id.
+            // Update user data in auth store (keep existing token)
+            const { token } = useAuthStore.getState();
+            if (token) {
+                setAuth(userData, token);
+            }
 
+            // Fetch student details using the user ID from /auth/me
             const studentResponse = await axios.get(`/students/${userData.id}`);
             const studentData = studentResponse.data;
 
@@ -156,13 +159,30 @@ const ProfilePage = () => {
             setAvailableCertificates(certsResponse.data);
         } catch (error) {
             console.error("Error fetching profile:", error);
-            toast.error("Failed to load profile data");
+
+            // If unauthorized, redirect to login
+            if (error.response?.status === 401) {
+                logout();
+                localStorage.removeItem("auth-storage");
+                navigate("/login");
+                return;
+            }
+
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: "Failed to load profile data",
+            });
         }
     };
 
     const onSubmit = async (data) => {
         if (!user) {
-            toast.error("User data not loaded");
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: "User data not loaded",
+            });
             return;
         }
         try {
@@ -314,19 +334,30 @@ const ProfilePage = () => {
         if (
             passwordData.new_password !== passwordData.new_password_confirmation
         ) {
-            toast.error("New passwords do not match");
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: "New passwords do not match",
+            });
             return;
         }
 
         if (passwordData.new_password.length < 8) {
-            toast.error("Password must be at least 8 characters");
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: "Password must be at least 8 characters",
+            });
             return;
         }
 
         setPasswordLoading(true);
         try {
             await axios.post("/auth/change-password", passwordData);
-            toast.success("Password changed successfully!");
+            toast({
+                title: "Success",
+                description: "Password changed successfully!",
+            });
             setPasswordData({
                 current_password: "",
                 new_password: "",
@@ -347,22 +378,45 @@ const ProfilePage = () => {
 
     const handleDeleteAccount = async () => {
         if (deleteConfirmText !== "DELETE") {
-            toast.error("Please type DELETE to confirm");
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: "Please type DELETE to confirm",
+            });
             return;
         }
 
         setDeleteLoading(true);
         try {
-            await axios.delete("/auth/delete-account");
-            toast.success("Account deleted successfully");
+            const response = await axios.delete("/auth/delete-account");
 
-            // Clear auth and redirect to home
-            localStorage.removeItem("access_token");
-            setAuth(null, null);
-            window.location.href = "/";
+            // Check if deletion was successful
+            if (response.data.success) {
+                toast({
+                    title: "Success",
+                    description: "Account deleted successfully",
+                });
+
+                // Clear auth state from Zustand
+                logout();
+
+                // Clear localStorage
+                localStorage.removeItem("auth-storage");
+
+                // Redirect to home page
+                window.location.href = "/";
+            } else {
+                throw new Error(
+                    response.data.message || "Failed to delete account"
+                );
+            }
         } catch (error) {
+            console.error("Delete account error:", error);
             const message =
-                error.response?.data?.message || "Failed to delete account";
+                error.response?.data?.error ||
+                error.response?.data?.message ||
+                error.message ||
+                "Failed to delete account";
             toast({
                 variant: "destructive",
                 title: "Error",
