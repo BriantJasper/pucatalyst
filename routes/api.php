@@ -12,6 +12,10 @@ use App\Http\Controllers\Api\CertificateController;
 use App\Http\Controllers\Api\RoadmapController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\ChatController;
+
+// Public Routes
+Route::post('/chat', [ChatController::class, 'sendMessage']);
 
 // Public Routes
 Route::post('/auth/register', [AuthController::class, 'register']);
