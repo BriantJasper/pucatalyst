@@ -266,7 +266,7 @@ const PLANET_CAMERA_CONFIG = {
         lookOffset: [0, 0, 0],
     },
     Saturn: {
-        offset: [1, 1, 1],
+        offset: [0.05, 0.025, 0.05],
         lookOffset: [0, 0, 0],
     },
     Uranus: {
@@ -337,7 +337,7 @@ const PLANETS = [
     },
     {
         name: "Saturn",
-        size: 0.11,
+        size: 40,
         color: "#e9c46a",
         position: [18, 1.5, -36],
         orbitRadius: 18,
@@ -351,7 +351,7 @@ const PLANETS = [
         position: [-20, -0.5, -44],
         orbitRadius: 22,
         speed: 0.0015,
-        modelPath: "/assets/3d/uranus.glb",
+        modelPath: "/assets/3d/uranus2.glb",
     },
     {
         name: "Neptune",
@@ -1054,9 +1054,7 @@ const UIOverlay = React.memo(function UIOverlay({
                     <div className="text-center space-y-6 px-4 max-w-4xl mx-auto">
                         {/* Logo/Brand */}
                         <div className="mb-4 animate-fade-in">
-                            <span className="text-cyan-400 text-lg tracking-widest uppercase font-medium">
-                                Welcome to
-                            </span>
+                            <span className="text-cyan-400 text-lg tracking-widest uppercase font-medium"></span>
                         </div>
 
                         <h1 className="text-6xl md:text-8xl font-bold text-white tracking-wider animate-fade-in">

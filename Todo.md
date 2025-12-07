@@ -12,5 +12,5 @@ Todo List
 -   [x] Email Verification / OTP Verification
 -   [x] Face Recognition Login
 -   [x] Forget Password
--   [ ] Chatbot using gemini API
+-   [x] Chatbot using gemini API
 -   [ ] 
