@@ -18,7 +18,9 @@ import Footer from "@/components/layouts/Footer";
 import StarryBackground from "@/components/StarryBackground";
 import api from "@/lib/axios";
 import { Link } from "react-router-dom";
-import { Loader2, Rocket } from "lucide-react";
+import { Rocket } from "lucide-react";
+import { DashboardSkeleton } from "@/components/ui/skeletons";
+import OnboardingTour from "@/components/OnboardingTour";
 
 interface DashboardData {
     user: UserProfile;
@@ -73,12 +75,7 @@ const Dashboard = () => {
                 <div className="relative z-10">
                     <Navbar />
                     <main className="p-8">
-                        <div className="max-w-7xl mx-auto flex flex-col items-center justify-center min-h-[60vh]">
-                            <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
-                            <p className="text-muted-foreground">
-                                Loading your dashboard...
-                            </p>
-                        </div>
+                        <DashboardSkeleton />
                     </main>
                 </div>
             </div>
@@ -212,6 +209,9 @@ const Dashboard = () => {
                 </main>
 
                 <Footer />
+
+                {/* Onboarding Tour for new users */}
+                <OnboardingTour />
             </div>
         </div>
     );

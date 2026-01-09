@@ -235,6 +235,11 @@ const PAGE_CONTENT = {
 // Global quality toggle tuned for low-power GPUs (e.g., MX150)
 const LOW_QUALITY = true;
 
+// Configure Draco decoder for compressed assets
+useGLTF.setDecoderPath(
+    "https://www.gstatic.com/draco/versioned/decoders/1.5.6/"
+);
+
 // Only preload essential models (Earth for intro, Sun as focal point)
 useGLTF.preload("/assets/3d/earth.glb");
 useGLTF.preload("/assets/3d/sun.glb");
@@ -1338,7 +1343,7 @@ const UIOverlay = React.memo(function UIOverlay({
             </div>
 
             {/* Warp Button - Always visible */}
-            <div className="fixed bottom-8 right-8 z-20">
+            {/* <div className="fixed bottom-8 right-8 z-20">
                 <button
                     onClick={() => setWarpActive(!warpActive)}
                     className="pointer-events-auto px-6 py-3 bg-black/50 backdrop-blur-sm text-white font-medium rounded-full hover:bg-black/70 transition-all border border-white/20 flex items-center gap-2"
@@ -1346,7 +1351,7 @@ const UIOverlay = React.memo(function UIOverlay({
                     <span>{warpActive ? <FaStop /> : <FaRocket />}</span>
                     {warpActive ? "Exit Warp" : "Warp Speed"}
                 </button>
-            </div>
+            </div> */}
         </>
     );
 });
@@ -1739,11 +1744,6 @@ export default function LandingPage3D() {
                             <p className="text-gray-500 text-sm">
                                 © 2025 PU Catalyst. All rights reserved.
                             </p>
-                            <div className="flex items-center gap-2 text-gray-500 text-sm">
-                                <span>Made with</span>
-                                <FaHeart className="text-red-500" />
-                                <span>for the alumni community</span>
-                            </div>
                         </div>
                     </div>
                 </footer>

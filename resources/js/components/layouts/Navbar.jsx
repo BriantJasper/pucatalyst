@@ -32,36 +32,42 @@ export default function Navbar() {
                         </Link>
                         <div className="hidden md:flex gap-6">
                             <Link
+                                id="nav-dashboard"
                                 to="/student/dashboard"
                                 className={isActive("/student/dashboard")}
                             >
                                 Dashboard
                             </Link>
                             <Link
+                                id="nav-roadmap"
                                 to="/student/roadmap"
                                 className={isActive("/student/roadmap")}
                             >
                                 Roadmap
                             </Link>
                             <Link
+                                id="nav-organizations"
                                 to="/student/organizations"
                                 className={isActive("/student/organizations")}
                             >
                                 Organizations
                             </Link>
                             <Link
+                                id="nav-certificates"
                                 to="/student/certificates"
                                 className={isActive("/student/certificates")}
                             >
                                 Certificates
                             </Link>
                             <Link
+                                id="nav-courses"
                                 to="/student/courses"
                                 className={isActive("/student/courses")}
                             >
                                 Courses
                             </Link>
                             <Link
+                                id="nav-profile"
                                 to="/student/profile"
                                 className={isActive("/student/profile")}
                             >

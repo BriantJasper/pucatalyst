@@ -13,4 +13,6 @@ Todo List
 -   [x] Face Recognition Login
 -   [x] Forget Password
 -   [x] Chatbot using gemini API
--   [ ] 
+-   [x] Skeleton Loading States
+-   [ ] Dark/Light Theme Toggle
+-   [x] Onboarding Tour

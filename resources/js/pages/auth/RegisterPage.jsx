@@ -5,6 +5,7 @@ import { useToast } from "../../hooks/use-toast";
 import api from "../../lib/axios";
 import StarryBackground from "../../components/StarryBackground";
 import { useAuthStore } from "../../store/authStore";
+import FaceCaptureComponent from "../../components/FaceCaptureComponent";
 
 export default function RegisterPage() {
     const navigate = useNavigate();
